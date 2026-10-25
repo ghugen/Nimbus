@@ -1,0 +1,25 @@
+{
+  "name": "Nimbus — Materiais acadêmicos",
+  "short_name": "Nimbus",
+  "description": "Sua biblioteca de resumos e materiais acadêmicos.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fdfcfe",
+  "theme_color": "#6955dc",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
