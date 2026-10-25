@@ -22,6 +22,9 @@ class Statement {
   async all() {
     return { results: db.prepare(this.sql).all(...this.args) };
   }
+  async first() {
+    return db.prepare(this.sql).get(...this.args) || null;
+  }
   async run() {
     return db.prepare(this.sql).run(...this.args);
   }
@@ -620,6 +623,377 @@ try {
   );
   checks++;
   globalThis.fetch = originalFetch;
+  // Novos fluxos: kits, arquivos imutáveis, versões, revisão, privacidade e avisos.
+  async function sendFile(
+    id,
+    filename,
+    content,
+    user = "charlie",
+    kind = "file",
+  ) {
+    const fd = new FormData();
+    fd.set("id", id);
+    fd.set("kind", kind);
+    fd.set("notes", "Atualização original com exemplos revisados.");
+    fd.set(
+      "file",
+      new File([content], filename, {
+        type: kind === "file" ? "application/pdf" : "image/png",
+      }),
+    );
+    const r = await POST(
+      new Request(
+        "https://nimbus.test/api/" +
+          (kind === "file" ? "upload" : "asset-upload"),
+        {
+          method: "POST",
+          headers: {
+            origin: "https://nimbus.test",
+            "oai-authenticated-user-id": user,
+            "oai-authenticated-user-email": user + "@nimbus.test",
+          },
+          body: fd,
+        },
+      ),
+    );
+    return r;
+  }
+  async function createMaterial(title) {
+    const p = await (
+      await expectStatus(
+        "author",
+        {
+          user: "charlie",
+          body: {
+            ...material,
+            title,
+            price: 0,
+            accepted_rate: 2500,
+            accepted_owned: 0,
+          },
+        },
+        200,
+      )
+    ).json();
+    const r = await sendFile(
+      p.id,
+      "original.pdf",
+      "%PDF-1.4\nOriginal " + title,
+    );
+    assert.equal(r.status, 200, await r.text());
+    checks++;
+    await expectStatus(
+      "author-meta",
+      {
+        user: "charlie",
+        body: {
+          id: p.id,
+          objectives: "Compreender conceitos com exemplos originais.",
+          toc: "Conceitos e exercícios",
+          sources: "Referências bibliográficas declaradas pelo autor.",
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "admin",
+      {
+        user: "admin",
+        body: {
+          action: "product",
+          id: p.id,
+          status: "published",
+          reviewed: true,
+          feedback: "Conteúdo e referências revisados para publicação.",
+        },
+      },
+      200,
+    );
+    return p.id;
+  }
+  const child1 = await createMaterial("Primeiro material do kit");
+  const child2 = await createMaterial("Segundo material do kit");
+  await expectStatus(
+    "author-meta",
+    { user: "bob", body: { id: child1, objectives: "Modificação indevida" } },
+    404,
+  );
+  await expectStatus(
+    "author-profile",
+    {
+      user: "charlie",
+      body: {
+        slug: "autor-charlie",
+        public_name: "Autor de Teste",
+        bio: "Biografia pública autorizada.",
+        credentials: "Formação declarada.",
+        public: true,
+      },
+    },
+    200,
+  );
+  await expectStatus(
+    "author-profile",
+    {
+      user: "bob",
+      body: {
+        slug: "autor-charlie",
+        public_name: "Outra pessoa",
+        public: true,
+      },
+    },
+    409,
+  );
+  const kit = await (
+    await expectStatus(
+      "author",
+      {
+        user: "charlie",
+        body: {
+          ...material,
+          title: "Kit de testes originais",
+          format: "Kits e coleções",
+          price: 0,
+        },
+      },
+      200,
+    )
+  ).json();
+  await expectStatus(
+    "author-meta",
+    { user: "charlie", body: { id: kit.id, bundle_ids: [child1] } },
+    400,
+  );
+  await expectStatus(
+    "author-meta",
+    { user: "charlie", body: { id: kit.id, bundle_ids: [child1, saved.id] } },
+    400,
+  );
+  await expectStatus(
+    "author-meta",
+    { user: "charlie", body: { id: kit.id, bundle_ids: [child1, child2] } },
+    200,
+  );
+  await expectStatus("submit", { user: "charlie", body: { id: kit.id } }, 200);
+  await expectStatus(
+    "admin",
+    {
+      user: "admin",
+      body: {
+        action: "product",
+        id: kit.id,
+        status: "changes_requested",
+        feedback: "Inclua mais informações sobre os objetivos do kit.",
+      },
+    },
+    200,
+  );
+  assert(
+    (await (await call("author", { user: "charlie" })).json()).editorial.some(
+      (e) => e.product_id === kit.id && e.action === "changes_requested",
+    ),
+  );
+  checks++;
+  await expectStatus(
+    "admin",
+    {
+      user: "admin",
+      body: { action: "product", id: kit.id, status: "published" },
+    },
+    200,
+  );
+  const kitOrder = await (
+    await expectStatus(
+      "checkout",
+      { user: "dora", body: { ids: [kit.id], accepted: true } },
+      200,
+    )
+  ).json();
+  const kitLibrary = (await (await call("library", { user: "dora" })).json())
+    .items;
+  assert(kitLibrary.some((i) => i.product_id === child1));
+  assert(kitLibrary.some((i) => i.product_id === child2));
+  assert(!kitLibrary.some((i) => i.product_id === kit.id));
+  checks++;
+  const originalBody = await (
+    await expectStatus("download/" + child1, { user: "dora" }, 200)
+  ).text();
+  await expectStatus("download/" + child1, { user: "bob" }, 403);
+  await expectStatus(
+    "checkout",
+    { user: "dora", body: { ids: [child1], accepted: true } },
+    409,
+  );
+  await expectStatus(
+    "checkout",
+    { user: "elena", body: { ids: [kit.id, child1], accepted: true } },
+    409,
+  );
+  const update = await sendFile(
+    child1,
+    "nova-versao.pdf",
+    "%PDF-1.4\nNova versão de teste",
+  );
+  assert.equal(update.status, 200, await update.text());
+  checks++;
+  await expectStatus(
+    "admin",
+    {
+      user: "admin",
+      body: {
+        action: "product",
+        id: child1,
+        status: "published",
+        reviewed: true,
+      },
+    },
+    200,
+  );
+  const versions = (
+    await (
+      await expectStatus("versions?id=" + child1, { user: "dora" }, 200)
+    ).json()
+  ).versions;
+  assert.equal(versions.length, 2);
+  assert.equal(versions[0].sequence, 2);
+  checks++;
+  const updatedBody = await (
+    await expectStatus(
+      "version-download/" + versions[0].id,
+      { user: "dora" },
+      200,
+    )
+  ).text();
+  assert(updatedBody.includes("Nova versão"));
+  assert.equal(
+    await (await call("download/" + child1, { user: "dora" })).text(),
+    originalBody,
+  );
+  checks++;
+  await expectStatus(
+    "version-download/" + versions[0].id,
+    { user: "bob" },
+    403,
+  );
+  const notices = (
+    await (await expectStatus("notifications", { user: "dora" }, 200)).json()
+  ).notifications;
+  assert(notices.some((n) => n.title === "Nova versão disponível"));
+  assert.equal(
+    notices.filter((n) => n.title === "Sua aquisição está disponível").length,
+    1,
+  );
+  checks++;
+  await expectStatus(
+    "notifications",
+    { user: "bob", body: { id: notices[0].id } },
+    200,
+  );
+  assert.equal(
+    db.prepare("SELECT read FROM notifications WHERE id=?").get(notices[0].id)
+      .read,
+    0,
+  );
+  checks++;
+  await expectStatus("operations", { user: "bob" }, 403);
+  const operations = await (
+    await expectStatus("operations", { user: "admin" }, 200)
+  ).json();
+  assert.equal(operations.readiness.email, false);
+  assert(!JSON.stringify(operations).includes("sk_test_fake"));
+  checks++;
+  await expectStatus(
+    "operations",
+    { user: "admin", body: { action: "retry_email", id: notices[0].id } },
+    200,
+  );
+  assert.equal(
+    db.prepare("SELECT status FROM email_outbox WHERE id=?").get(notices[0].id)
+      .status,
+    "pending",
+  );
+  checks++;
+  const visitor = "12345678-1234-1234-1234-123456789abc";
+  await expectStatus(
+    "metric",
+    {
+      user: null,
+      body: { productId: child1, kind: "view", visitor, consent: false },
+    },
+    400,
+  );
+  for (let i = 0; i < 2; i++)
+    await expectStatus(
+      "metric",
+      {
+        user: null,
+        body: { productId: child1, kind: "view", visitor, consent: true },
+      },
+      200,
+    );
+  const metrics = (
+    await (await expectStatus("analytics", { user: "charlie" }, 200)).json()
+  ).metrics;
+  assert.equal(metrics.find((p) => p.id === child1).views, 1);
+  assert(
+    !(await (await call("analytics", { user: "bob" })).json()).metrics.some(
+      (p) => p.id === child1,
+    ),
+  );
+  checks++;
+  const publicCatalog = (await (await call("catalog", { user: null })).json())
+    .products;
+  const publicItem = publicCatalog.find((p) => p.id === child1);
+  assert(!("cover_key" in publicItem));
+  assert(!("preview_keys" in publicItem));
+  assert(!("file_key" in publicItem));
+  assert.equal(publicItem.author_slug, "autor-charlie");
+  checks++;
+  const invalidImage = await sendFile(
+    child1,
+    "falsa.png",
+    "isto não é uma imagem válida",
+    "charlie",
+    "cover",
+  );
+  assert.equal(invalidImage.status, 400);
+  checks++;
+  const image = await sendFile(
+    child1,
+    "capa.png",
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0, 0, 0]),
+    "charlie",
+    "cover",
+  );
+  assert.equal(image.status, 200, await image.text());
+  checks++;
+  await expectStatus("asset/" + child1 + "/cover", { user: null }, 404);
+  await expectStatus(
+    "admin",
+    {
+      user: "admin",
+      body: { action: "product", id: child1, status: "published" },
+    },
+    200,
+  );
+  const coverResponse = await expectStatus(
+    "asset/" + child1 + "/cover",
+    { user: null },
+    200,
+  );
+  assert.equal(coverResponse.headers.get("Content-Type"), "image/png");
+  checks++;
+  await expectStatus(
+    "asset-remove",
+    { user: "charlie", body: { id: child1, kind: "preview", index: -1 } },
+    400,
+  );
+  db.prepare("UPDATE orders SET status='refunded' WHERE id=?").run(
+    kitOrder.order,
+  );
+  await expectStatus("download/" + child1, { user: "dora" }, 403);
+  await expectStatus("versions?id=" + child1, { user: "dora" }, 403);
+
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );

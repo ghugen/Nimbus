@@ -51,3 +51,9 @@ Não publicar prontuários identificados, listas de alunos, documentos, imagens 
 - LGPD compilada: https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709compilado.htm
 - ANPD, agentes de pequeno porte: https://www.gov.br/anpd/pt-br/acesso-a-informacao/institucional/atos-normativos/regulamentacoes_anpd/resolucao-cd-anpd-no-2-de-27-de-janeiro-de-2022
 - ANPD, guia de cookies: https://www.gov.br/anpd/pt-br/centrais-de-conteudo/materiais-educativos-e-publicacoes/guia_orientativo_cookies_e_protecao_de_dados_pessoais
+
+## Novos registros do marketplace
+
+O inventário inclui perfis públicos autorizados, histórico editorial e versões, componentes de kits por compra, notificações internas e fila de e-mails transacionais. A exportação inclui avisos e componentes adquiridos. Clerk e Resend são integrações opcionais; validar contratos, configuração, bases aplicáveis e transferências antes de ativá-los. O acesso não mescla contas de provedores distintos.
+
+Medição de catálogo é opcional e desativada sem escolha afirmativa. O identificador da sessão permanece no sessionStorage; o servidor registra apenas hash por evento/material/dia, tipo, material e data. Relatórios agregados restritos ao autor e administrador. Definir rotina e prazo de retenção para eventos e fila de e-mails; nesta versão não existe expurgo automático. Revogar a escolha impede novos eventos, sem apagar automaticamente os anteriores.

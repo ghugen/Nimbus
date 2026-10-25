@@ -1,3 +1,12 @@
+import { extension } from "@/lib/extensions";
+import { emailIdentity } from "@/lib/identity";
+import {
+  bundleIds,
+  entitlement,
+  validateBundle,
+  type RichProduct,
+} from "@/lib/catalog-services";
+import { notify, deliver, purchaseNotice } from "@/lib/notifications";
 import {
   policy,
   reconcile,
@@ -20,6 +29,10 @@ import { parseCart, validProduct, verifyStripe } from "@/lib/commerce";
 export const dynamic = "force-dynamic";
 type Runtime = {
   DB: D1Database;
+  CLERK_SECRET_KEY?: string;
+  CLERK_PUBLISHABLE_KEY?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
   BUCKET: R2Bucket;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
@@ -38,6 +51,8 @@ function fail(message: string, status = 400): never {
   throw Object.assign(new Error(message), { status });
 }
 type Body = {
+  reviewed?: boolean;
+  feedback?: string;
   controller?: string;
   contact?: string;
   retention?: string;
@@ -105,10 +120,10 @@ async function run(sql: string, ...args: unknown[]) {
     .bind(...args)
     .run();
 }
-function who(req: Request) {
+async function who(req: Request) {
   const id = req.headers.get("oai-authenticated-user-id"),
     email = req.headers.get("oai-authenticated-user-email");
-  if (!id || !email) return null;
+  if (!id || !email) return emailIdentity(req, runtime());
   let name =
     req.headers.get("oai-authenticated-user-full-name") || email.split("@")[0];
   if (
@@ -131,7 +146,7 @@ function who(req: Request) {
   };
 }
 async function auth(req: Request) {
-  const user = who(req);
+  const user = await who(req);
   if (!user) fail("Entre na sua conta para continuar.", 401);
   await run(
     "INSERT INTO users (id,email,name,created) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET email=excluded.email",
@@ -158,7 +173,9 @@ async function log(user: string, action: string, target: string) {
   );
 }
 async function catalog() {
-  const db = await all<Product>("SELECT * FROM products");
+  const db = await all<Product>(
+    "SELECT p.*,u.author_slug FROM products p LEFT JOIN users u ON u.id=p.author_id",
+  );
   const map = new Map(seed.map((p) => [p.id, p]));
   db.forEach((p) => map.set(p.id, p));
   const ratings = await all<{
@@ -180,13 +197,7 @@ async function catalog() {
   }));
 }
 async function purchased(user: string, id: string) {
-  return (
-    await all(
-      "SELECT i.* FROM order_items i JOIN orders o ON o.id=i.order_id WHERE o.user_id=? AND o.status='paid' AND i.product_id=? LIMIT 1",
-      user,
-      id,
-    )
-  )[0];
+  return entitlement(runtime(), user, id);
 }
 async function dispatch(req: Request) {
   const url = new URL(req.url);
@@ -198,6 +209,8 @@ async function dispatch(req: Request) {
     if (!origin || origin !== url.origin)
       fail("Origem da solicitação inválida.", 403);
   }
+  const extended = await extension(req, runtime(), auth);
+  if (extended) return extended;
   if (path[0] === "privacy-info" && method === "GET") {
     return json({
       settings: (
@@ -248,6 +261,18 @@ async function dispatch(req: Request) {
       ),
       publications: await all(
         "SELECT id,title,description,category,course,subject,topic,format,price,pages,author,preview,status,file_name,created,updated FROM products WHERE author_id=?",
+        u.id,
+      ),
+      notifications: await all(
+        "SELECT title,message,href,read,created FROM notifications WHERE user_id=?",
+        u.id,
+      ),
+      email_notifications: await all(
+        "SELECT subject,message,status,created,sent FROM email_outbox WHERE user_id=?",
+        u.id,
+      ),
+      kit_items: await all(
+        "SELECT a.product_id,a.title,a.parent_id,o.id order_id FROM order_assets a JOIN orders o ON o.id=a.order_id WHERE o.user_id=?",
         u.id,
       ),
       finances: await financialReport(runtime(), u.id),
@@ -345,13 +370,19 @@ async function dispatch(req: Request) {
           author_id,
           accepted_bps,
           accepted_owned,
+          cover_key,
+          preview_keys,
           ...p
-        }) => p,
+        }) => ({
+          ...p,
+          has_cover: !!cover_key,
+          preview_count: JSON.parse(preview_keys || "[]").length,
+        }),
       );
     return json({ products, payments: !!runtime().STRIPE_SECRET_KEY });
   }
   if (path[0] === "me" && method === "GET") {
-    const u = who(req);
+    const u = await who(req);
     if (!u) return json({ user: null });
     await auth(req);
     const profile = (await all("SELECT * FROM users WHERE id=?", u.id))[0];
@@ -442,9 +473,30 @@ async function dispatch(req: Request) {
         products.find((p) => p.id === id && p.status === "published") ||
         fail("Um material não está mais disponível.", 409),
     );
+    const bundleMap = new Map<string, RichProduct[]>();
+    const included = new Set<string>();
+    for (const p of selected) {
+      const children = await validateBundle(
+        runtime(),
+        p.id,
+        p.author_id,
+        bundleIds(p),
+      );
+      bundleMap.set(p.id, children);
+      for (const child of children) {
+        if (ids.includes(child.id) || included.has(child.id))
+          fail("Há materiais repetidos entre os kits e o carrinho.", 409);
+        included.add(child.id);
+        if (await purchased(u.id, child.id))
+          fail(`Você já possui um material deste kit: ${child.title}`, 409);
+      }
+    }
     for (const p of selected) {
       if (await purchased(u.id, p.id)) fail(`Você já possui: ${p.title}`, 409);
-      if (p.price > 0 && (p.demo || !p.file_key))
+      if (
+        p.price > 0 &&
+        (p.demo || (!p.file_key && !bundleMap.get(p.id)?.length))
+      )
         fail("Este material é demonstrativo e ainda não está à venda.", 409);
       if (p.file_key && !(await BUCKET.head(p.file_key)))
         fail("Arquivo indisponível. Entre em contato com o suporte.", 409);
@@ -501,9 +553,27 @@ async function dispatch(req: Request) {
           POLICY_VERSION,
         ),
       ),
+      ...selected.flatMap((p) =>
+        (bundleMap.get(p.id) || []).map((child) =>
+          DB.prepare(
+            "INSERT INTO order_assets(id,order_id,parent_id,product_id,title,file_key,file_name,content,version_id) VALUES(?,?,?,?,?,?,?,?,?)",
+          ).bind(
+            uid(),
+            id,
+            p.id,
+            child.id,
+            child.title,
+            child.file_key,
+            child.file_name,
+            child.preview,
+            null,
+          ),
+        ),
+      ),
     ]);
     if (total === 0) {
       await reconcile(runtime(), id);
+      await purchaseNotice(runtime(), id, u.id);
       return json({ ok: true, order: id, free: true });
     }
     const form = new URLSearchParams({
@@ -651,12 +721,41 @@ async function dispatch(req: Request) {
         console.warn("Finance pending", affected, (e as Error).message);
       }
     }
+    if (
+      order &&
+      (
+        await all<{ status: string }>(
+          "SELECT status FROM orders WHERE id=?",
+          order.id,
+        )
+      )[0]?.status === "paid" &&
+      [
+        "checkout.session.completed",
+        "checkout.session.async_payment_succeeded",
+      ].includes(event.type)
+    ) {
+      const owner = (
+        await all<{ user_id: string }>(
+          "SELECT user_id FROM orders WHERE id=?",
+          order.id,
+        )
+      )[0];
+      await purchaseNotice(runtime(), order.id, owner.user_id);
+    }
+    if (typeof event.id === "string")
+      await run(
+        "INSERT OR IGNORE INTO webhook_events(id,kind,created) VALUES(?,?,?)",
+        event.id,
+        event.type,
+        now(),
+      );
     return json({ received: true });
   }
   if (path[0] === "library" && method === "GET") {
     const u = await auth(req);
     const items = await all(
-      "SELECT i.product_id,i.title,i.file_name,o.created,o.id order_id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE o.user_id=? AND o.status='paid' ORDER BY o.created DESC",
+      "SELECT i.product_id,i.title,i.file_name,o.created,o.id order_id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE o.user_id=? AND o.status='paid' AND NOT EXISTS(SELECT 1 FROM order_assets a WHERE a.order_id=o.id AND a.parent_id=i.product_id) UNION ALL SELECT a.product_id,a.title,a.file_name,o.created,o.id order_id FROM order_assets a JOIN orders o ON o.id=a.order_id WHERE o.user_id=? AND o.status='paid' ORDER BY created DESC",
+      u.id,
       u.id,
     );
     const progress = await all("SELECT * FROM study WHERE user_id=?", u.id);
@@ -798,6 +897,10 @@ async function dispatch(req: Request) {
       );
       return json({
         products,
+        editorial: await all(
+          "SELECT e.* FROM editorial_events e JOIN products p ON p.id=e.product_id WHERE p.author_id=? ORDER BY e.created DESC",
+          u.id,
+        ),
         sales,
         policy: await policy(runtime(), u.id),
         finance: await financialReport(runtime(), u.id),
@@ -884,6 +987,10 @@ async function dispatch(req: Request) {
           now(),
         );
       await run(
+        "UPDATE products SET reviewed_by=NULL,reviewed_at=NULL WHERE id=?",
+        id,
+      );
+      await run(
         "UPDATE products SET course=?,level=?,language=?,updated=?,topic=? WHERE id=?",
         normalized.course,
         normalized.level,
@@ -911,6 +1018,29 @@ async function dispatch(req: Request) {
         }),
         now(),
       );
+      const profileSlug = (
+        await all<{ author_slug: string | null }>(
+          "SELECT author_slug FROM users WHERE id=?",
+          u.id,
+        )
+      )[0];
+      if (!profileSlug.author_slug) {
+        const digest = Array.from(
+          new Uint8Array(
+            await crypto.subtle.digest(
+              "SHA-256",
+              new TextEncoder().encode(u.id),
+            ),
+          ),
+        )
+          .map((x) => x.toString(16).padStart(2, "0"))
+          .join("");
+        await run(
+          "UPDATE users SET author_slug=? WHERE id=?",
+          "autor-" + digest.slice(0, 16),
+          u.id,
+        );
+      }
       await log(u.id, "product.saved", id);
       return json({ ok: true, id });
     }
@@ -946,6 +1076,22 @@ async function dispatch(req: Request) {
       file.name.slice(0, 180),
       "pending",
       now(),
+      id,
+    );
+    const revision =
+      clean(form.get("notes"), 4000) || "Arquivo enviado para revisão.";
+    await run(
+      "INSERT INTO product_versions(id,product_id,sequence,file_key,file_name,notes,status,created) SELECT ?,?,COALESCE(MAX(sequence),0)+1,?,?,?,'pending',? FROM product_versions WHERE product_id=?",
+      uid(),
+      id,
+      key,
+      file.name.slice(0, 180),
+      revision,
+      now(),
+      id,
+    );
+    await run(
+      "UPDATE products SET reviewed_by=NULL,reviewed_at=NULL WHERE id=?",
       id,
     );
     await log(u.id, "product.submitted", id);
@@ -1047,7 +1193,11 @@ async function dispatch(req: Request) {
     if (method === "POST") {
       const b = await body(req);
       if (b.action === "product") {
-        if (!["published", "rejected", "draft"].includes(b.status))
+        if (
+          !["published", "rejected", "draft", "changes_requested"].includes(
+            b.status,
+          )
+        )
           fail("Status inválido.");
         const p = (await catalog()).find((p) => p.id === b.id);
         if (p && b.status === "published") {
@@ -1058,9 +1208,93 @@ async function dispatch(req: Request) {
           )
             fail("O autor deve aceitar as condições comerciais atuais.", 409);
         }
-        if (!p || p.demo || !p.file_key)
+        if (!p || p.demo || (!p.file_key && !bundleIds(p).length))
           fail("Apenas materiais reais com arquivo podem ser publicados.");
-        await run("UPDATE products SET status=? WHERE id=?", b.status, p.id);
+        if (b.status === "published")
+          await validateBundle(runtime(), p.id, p.author_id, bundleIds(p));
+        const reviewer = (
+          await all<{ name: string; public_name: string }>(
+            "SELECT name,public_name FROM users WHERE id=?",
+            u.id,
+          )
+        )[0];
+        if (
+          b.reviewed === true &&
+          b.status === "published" &&
+          ((p.objectives || "").length < 10 || (p.sources || "").length < 10)
+        )
+          fail(
+            "Para registrar revisão, informe objetivos e referências no material.",
+          );
+        await run(
+          "UPDATE products SET status=?,reviewed_by=?,reviewed_at=? WHERE id=?",
+          b.status,
+          b.reviewed === true && b.status === "published"
+            ? reviewer.public_name || reviewer.name
+            : null,
+          b.reviewed === true && b.status === "published" ? now() : null,
+          p.id,
+        );
+        const feedback =
+          clean(b.feedback, 5000) ||
+          (b.status === "published"
+            ? "Material aprovado para publicação."
+            : "Consulte a administração para orientações.");
+        await run(
+          "INSERT INTO editorial_events(id,product_id,action,feedback,reviewer,created) VALUES(?,?,?,?,?,?)",
+          uid(),
+          p.id,
+          b.status,
+          feedback,
+          reviewer.name,
+          now(),
+        );
+        const noteId = "editorial:" + uid();
+        await notify(
+          runtime(),
+          noteId,
+          p.author_id,
+          b.status === "published"
+            ? "Material publicado"
+            : "Retorno sobre seu material",
+          p.title + " — " + feedback,
+          "/#autores",
+        );
+        await deliver(runtime(), noteId);
+        if (b.status === "published" && p.file_key) {
+          const versions = await all<{ id: string; sequence: number }>(
+            "SELECT id,sequence FROM product_versions WHERE product_id=? AND file_key=? AND status='pending'",
+            p.id,
+            p.file_key,
+          );
+          await run(
+            "UPDATE product_versions SET status='published',released=? WHERE product_id=? AND file_key=?",
+            now(),
+            p.id,
+            p.file_key,
+          );
+          if (versions.length) {
+            const buyers = await all<{ user_id: string }>(
+              "SELECT DISTINCT o.user_id FROM orders o JOIN order_items i ON i.order_id=o.id WHERE o.status='paid' AND i.product_id=? UNION SELECT DISTINCT o.user_id FROM orders o JOIN order_assets a ON a.order_id=o.id WHERE o.status='paid' AND a.product_id=?",
+              p.id,
+              p.id,
+            );
+            for (const buyer of buyers) {
+              const updateId = "update:" + versions[0].id + ":" + buyer.user_id;
+              await notify(
+                runtime(),
+                updateId,
+                buyer.user_id,
+                "Nova versão disponível",
+                p.title +
+                  " recebeu uma atualização. Consulte as novidades na biblioteca.",
+                "/#biblioteca",
+              );
+              await deliver(runtime(), updateId);
+            }
+          }
+        }
+
         await log(u.id, `product.${b.status}`, p.id);
       } else if (b.action === "ticket") {
         await run(
@@ -1069,6 +1303,24 @@ async function dispatch(req: Request) {
           "closed",
           clean(b.id, 100),
         );
+        const owner = (
+          await all<{ user_id: string }>(
+            "SELECT user_id FROM tickets WHERE id=?",
+            clean(b.id, 100),
+          )
+        )[0];
+        if (owner) {
+          const id = "support:" + uid();
+          await notify(
+            runtime(),
+            id,
+            owner.user_id,
+            "Resposta do suporte",
+            "Sua solicitação recebeu uma resposta. Consulte o atendimento na Nimbus.",
+            "/#suporte",
+          );
+          await deliver(runtime(), id);
+        }
         await log(u.id, "ticket.responded", clean(b.id, 100));
       } else fail("Ação inválida.");
       return json({ ok: true });

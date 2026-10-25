@@ -4,6 +4,18 @@ export const formats = materialTypes;
 export type Product = {
   id: string;
   author_id: string;
+  objectives?: string;
+  toc?: string;
+  sources?: string;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  revision_notes?: string;
+  cover_key?: string | null;
+  preview_keys?: string;
+  bundle_ids?: string;
+  has_cover?: boolean;
+  preview_count?: number;
+  author_slug?: string;
   owned?: number;
   accepted_bps?: number | null;
   accepted_owned?: number | null;

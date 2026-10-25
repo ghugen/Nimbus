@@ -1,4 +1,5 @@
 "use client";
+import {signedFetch} from "@/lib/client-auth";
 import { useEffect, useState } from "react";
 type Settings = {
   controller: string;
@@ -18,7 +19,7 @@ type PrivacyRequest = {
   email?: string;
 };
 async function request(path: string, body?: unknown) {
-  const res = await fetch(
+  const res = await signedFetch(
     "/api/" + path,
     body
       ? {

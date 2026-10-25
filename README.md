@@ -174,3 +174,15 @@ A central não envia e-mails, não executa exclusão automática nem configura b
 ## Marca Nimbus
 
 Símbolo vetorial próprio de nuvem geométrica com dobra de página, aplicado na interface, capas e ícones. Assinaturas horizontal, monocromática, invertida e símbolo isolado estão em `public/brand/`. O guia visual navegável é `/brand/index.html`. As assinaturas em SVG usam texto com fallback; para produção gráfica final, instalar Manrope ou converter texto em curvas. Esses arquivos não substituem pesquisa de disponibilidade e registro de marca.
+
+## Evolução do marketplace
+
+Páginas individuais em `/materiais/:id` e `/autores/:slug`, perfil público opcional, capas e até seis imagens de amostra. O autor publica em quatro etapas, confirma direitos e condições comerciais e recebe devolutivas da administração. Revisão de conteúdo exige registro explícito do revisor, objetivos e referências.
+
+Kits reúnem ao menos dois materiais publicados do mesmo autor, sem outros kits. A compra registra cópias das referências dos arquivos; mudanças posteriores no kit não alteram a entrega original. Compradores acessam novas versões aprovadas dos materiais na biblioteca. Reembolso remove o direito de acesso.
+
+Notificações internas cobrem aquisição, publicação/revisão, atualização e suporte. E-mail depende de `RESEND_API_KEY` e `EMAIL_FROM` (domínio verificado); sem configuração, a fila permanece pendente. O painel de operação permite novas tentativas. Não há disparo de marketing nem agendamento automático de tentativas.
+
+Login independente por e-mail está integrado ao Clerk e depende de `CLERK_PUBLISHABLE_KEY` e `CLERK_SECRET_KEY`. Configure a aplicação, domínio e verificação de e-mail no provedor. A autenticação Sites continua disponível. Contas dos dois provedores têm identificadores separados e não são mescladas por e-mail.
+
+Indicadores de visualização, prévia e carrinho exigem permissão opcional no navegador; são uma amostra deduplicada por sessão/material/evento/dia, não visitantes únicos nem todo o tráfego. Compras vêm de pedidos confirmados. A escolha pode ser alterada na página de privacidade. O painel administrativo mostra pendências de pagamentos, webhook, identidade, e-mail e responsável por privacidade. Credenciais e teste real dos serviços externos ainda são necessários antes da operação comercial.

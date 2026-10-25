@@ -1,4 +1,14 @@
 "use client";
+import { AuthorStudio } from "@/components/author-studio";
+import {
+  NotificationCenter,
+  VersionList,
+  AnalyticsPanel,
+  OperationsPanel,
+  EditorialPanel,
+} from "@/components/commerce-panels";
+import { MeasurementPreferences } from "@/components/measurement-preferences";
+import { signedFetch, downloadPrivate, metric } from "@/lib/client-auth";
 import { BrandGlyph } from "@/components/brand-glyph";
 import { PrivacyCenter } from "@/components/privacy-center";
 import { FinancePanel, EarningsPreview } from "@/components/finance-panel";
@@ -146,7 +156,7 @@ type ApiResponse = {
   accounts: FinanceAccount[];
 };
 async function api(path: string, data?: unknown) {
-  const r = await fetch(
+  const r = await signedFetch(
     "/api/" + path,
     data
       ? {
@@ -256,6 +266,11 @@ export default function Nimbus() {
     setFavorites(d.favorites || []);
   }
   useEffect(() => {
+    const listener = () => refresh().catch((e) => setError(e.message));
+    window.addEventListener("nimbus-auth-changed", listener);
+    return () => window.removeEventListener("nimbus-auth-changed", listener);
+  }, []);
+  useEffect(() => {
     if ("serviceWorker" in navigator)
       navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
@@ -305,6 +320,7 @@ export default function Nimbus() {
   }, [view, user?.id]);
   useEffect(() => {
     if (!detail) return;
+    metric(detail.id, "view");
     setReviews([]);
     api("reviews?id=" + encodeURIComponent(detail.id))
       .then((d) => setReviews(d.reviews))
@@ -440,6 +456,7 @@ export default function Nimbus() {
     .map((id) => products.find((p) => p.id === id))
     .filter(Boolean) as Product[];
   function add(p: Product) {
+    metric(p.id, "cart");
     if (cart.includes(p.id)) {
       go("carrinho");
       setDetail(null);
@@ -476,14 +493,8 @@ export default function Nimbus() {
         Entre com sua conta para encontrar seus materiais, acompanhar pedidos e
         continuar estudando.
       </p>
-      <a
-        className="btn primary"
-        href={
-          "/signin-with-chatgpt?return_to=" + encodeURIComponent("/#" + view)
-        }
-        target="_top"
-      >
-        Entrar com ChatGPT <ArrowUpRight size={17} />
+      <a className="btn primary" href={"/entrar"} target="_top">
+        Entrar na Nimbus <ArrowUpRight size={17} />
       </a>
       <small>
         Seu acesso é protegido. Não solicitamos sua senha do ChatGPT.
@@ -635,11 +646,7 @@ export default function Nimbus() {
                 <span>Minha biblioteca</span>
               </button>
             ) : (
-              <a
-                className="btn primary small"
-                href="/signin-with-chatgpt?return_to=%2F%23biblioteca"
-                target="_top"
-              >
+              <a className="btn primary small" href="/entrar" target="_top">
                 Entrar <ArrowUpRight size={15} />
               </a>
             )}
@@ -686,6 +693,12 @@ export default function Nimbus() {
               className={view === "suporte" ? "active" : ""}
             >
               <MessageCircle size={15} /> Suporte
+            </button>
+            <button
+              onClick={() => go("notificacoes")}
+              className={view === "notificacoes" ? "active" : ""}
+            >
+              <Mail size={15} /> Notificações
             </button>
             {user.admin && (
               <button
@@ -1475,7 +1488,7 @@ export default function Nimbus() {
                   ) : (
                     <a
                       className="btn primary full"
-                      href="/signin-with-chatgpt?return_to=%2F%23carrinho"
+                      href="/entrar"
                       target="_top"
                     >
                       Entrar para continuar <ArrowRight size={16} />
@@ -1586,12 +1599,18 @@ export default function Nimbus() {
                         >
                           Abrir material <ArrowUpRight size={16} />
                         </button>
-                        <a
+                        <button
                           className="text-link"
-                          href={"/api/download/" + item.product_id}
+                          onClick={() =>
+                            action(() =>
+                              downloadPrivate(
+                                "/api/download/" + item.product_id,
+                              ),
+                            )
+                          }
                         >
                           <Download size={15} /> Baixar arquivo
-                        </a>
+                        </button>
                       </article>
                     ))}
                   </div>
@@ -1754,407 +1773,17 @@ export default function Nimbus() {
         )}
         {view === "autores" && (
           <section className="container page-section">
-            <div className="page-heading with-action">
-              <div>
-                <span className="eyebrow">CRIE. COMPARTILHE. INSPIRE.</span>
-                <h1>Seu conhecimento tem espaço.</h1>
-                <p>
-                  Publique materiais autorais e acompanhe suas vendas na Nimbus.
-                </p>
-              </div>
-              {user && (
-                <button
-                  className="btn primary"
-                  onClick={() => {
-                    setForm(emptyForm);
-                    document
-                      .getElementById("author-form")
-                      ?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                >
-                  <Plus size={17} /> Novo material
-                </button>
-              )}
-            </div>
-            {!user ? (
-              <>
-                <div className="author-benefits">
-                  <Stat
-                    icon={<PenLine />}
-                    value="01"
-                    label="Prepare seu material original"
-                  />
-                  <Stat
-                    icon={<ShieldCheck />}
-                    value="02"
-                    label="Envie o arquivo para aprovação"
-                  />
-                  <Stat
-                    icon={<BarChart3 />}
-                    value="03"
-                    label="Acompanhe vendas confirmadas"
-                  />
-                </div>
-                {signedOut("Sua próxima publicação começa aqui.")}
-                <p className="muted center">
-                  Sem mensalidade ou taxa de envio. A Nimbus recebe 25% do
-                  líquido após processamento nas vendas de parceiros, salvo
-                  regra individual acordada. Repasses são controlados
-                  mensalmente e realizados fora da plataforma.
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="stats">
-                  <Stat
-                    icon={<FileText />}
-                    value={author.products.length}
-                    label="Materiais enviados"
-                  />
-                  <Stat
-                    icon={<ShoppingBag />}
-                    value={author.sales.length}
-                    label="Vendas confirmadas"
-                  />
-                  <Stat
-                    icon={<BarChart3 />}
-                    value={money(author.sales.reduce((s, x) => s + x.price, 0))}
-                    label="Valor bruto dos materiais · não é saldo para saque"
-                  />
-                </div>
-                <div className="notice">
-                  Publicações passam por aprovação. O painel registra vendas
-                  brutas. A comissão padrão é de 25% após custos de
-                  processamento, com condições específicas exibidas abaixo.
-                </div>
-                {author.finance && <FinancePanel report={author.finance} />}
-                <div className="author-layout">
-                  <div>
-                    <h2 className="subheading">Meus materiais</h2>
-                    {author.products.length ? (
-                      author.products.map((p) => (
-                        <div className="panel author-product" key={p.id}>
-                          <div>
-                            <Status value={p.status} />
-                            <h3>{p.title}</h3>
-                            <p>
-                              {money(p.price)} · {p.format}
-                            </p>
-                            <small>
-                              {p.file_name || "arquivo ainda não enviado"}
-                            </small>
-                          </div>
-                          <button
-                            className="btn secondary small"
-                            onClick={() => {
-                              setForm({
-                                id: p.id,
-                                title: p.title,
-                                description: p.description,
-                                category: p.category,
-                                course: p.course || "",
-                                level: p.level || "Graduação",
-                                language: p.language || "Português",
-                                subject: p.subject,
-                                topic: p.topic || "",
-                                format: p.format,
-                                price: (p.price / 100).toFixed(2),
-                                pages: String(p.pages),
-                                preview: p.preview,
-                                rights: false,
-                                commercial_accepted: false,
-                              });
-                              document
-                                .getElementById("author-form")
-                                ?.scrollIntoView({ behavior: "smooth" });
-                            }}
-                          >
-                            Editar
-                          </button>
-                          <label className="upload-label">
-                            <Upload size={15} />{" "}
-                            {p.file_key
-                              ? "Substituir arquivo"
-                              : "Enviar arquivo (até 20 MB)"}
-                            <input
-                              type="file"
-                              accept=".pdf,.txt,.docx,.xlsx,.pptx,.png,.jpg,.zip,.mp4,.mp3"
-                              disabled={busy}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                action(async () => {
-                                  const data = new FormData();
-                                  data.set("id", p.id);
-                                  data.set("file", file);
-                                  const r = await fetch("/api/upload", {
-                                    method: "POST",
-                                    body: data,
-                                  });
-                                  const result =
-                                    (await r.json()) as ApiResponse;
-                                  if (!r.ok) throw new Error(result.error);
-                                  setAuthor(await api("author"));
-                                  notify("arquivo enviado para aprovação.");
-                                });
-                              }}
-                            />
-                          </label>
-                        </div>
-                      ))
-                    ) : (
-                      <Empty
-                        icon={<PenLine />}
-                        title="O próximo autor pode ser você."
-                        text="Preencha os dados ao lado, salve e envie seu arquivo."
-                      />
-                    )}
-                  </div>
-                  <form
-                    id="author-form"
-                    className="panel form"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      action(async () => {
-                        const result = await api("author", {
-                          ...form,
-                          accepted_rate: author.policy?.owned
-                            ? 0
-                            : (author.policy?.commission_bps ?? 2500),
-                          accepted_owned: author.policy?.owned || 0,
-                          price: Math.round(
-                            Number(form.price.replace(",", ".")) * 100,
-                          ),
-                          pages: Number(form.pages),
-                        });
-                        setAuthor(await api("author"));
-                        setForm({ ...emptyForm, id: result.id });
-                        notify(
-                          "Rascunho salvo. Agora envie o arquivo em Meus materiais.",
-                        );
-                      });
-                    }}
-                  >
-                    <h2>{form.id ? "Editar material" : "Novo material"}</h2>
-                    <p>
-                      Primeiro salve o rascunho. Depois, envie o arquivo para
-                      análise.
-                    </p>
-                    <label>
-                      Título
-                      <input
-                        value={form.title}
-                        onChange={(e) =>
-                          setForm({ ...form, title: e.target.value })
-                        }
-                        required
-                        minLength={5}
-                        maxLength={150}
-                      />
-                    </label>
-                    <div className="form-row">
-                      <label>
-                        Área
-                        <select
-                          value={form.category}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              category: e.target.value,
-                              course: areas[e.target.value][0],
-                            })
-                          }
-                        >
-                          {categories.slice(1).map((c) => (
-                            <option key={c}>{c}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Tipo de material
-                        <select
-                          value={form.format}
-                          onChange={(e) =>
-                            setForm({ ...form, format: e.target.value })
-                          }
-                        >
-                          {formats.map((f) => (
-                            <option key={f}>{f}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="form-row">
-                      <label>
-                        Curso
-                        <select
-                          value={form.course}
-                          onChange={(e) =>
-                            setForm({ ...form, course: e.target.value })
-                          }
-                        >
-                          {(areas[form.category] || []).map((c) => (
-                            <option key={c}>{c}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Nível de ensino
-                        <select
-                          value={form.level}
-                          onChange={(e) =>
-                            setForm({ ...form, level: e.target.value })
-                          }
-                        >
-                          {levels.map((c) => (
-                            <option key={c}>{c}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <label>
-                      Idioma
-                      <select
-                        value={form.language}
-                        onChange={(e) =>
-                          setForm({ ...form, language: e.target.value })
-                        }
-                      >
-                        {languages.map((c) => (
-                          <option key={c}>{c}</option>
-                        ))}
-                      </select>
-                    </label>{" "}
-                    <label>
-                      Disciplina
-                      <input
-                        value={form.subject}
-                        onChange={(e) =>
-                          setForm({ ...form, subject: e.target.value })
-                        }
-                        required
-                        maxLength={100}
-                      />
-                    </label>
-                    <label>
-                      Assunto específico (opcional)
-                      <input
-                        value={form.topic}
-                        onChange={(e) =>
-                          setForm({ ...form, topic: e.target.value })
-                        }
-                        maxLength={120}
-                        placeholder="Ex.: Sistema respiratório"
-                      />
-                    </label>{" "}
-                    <div className="form-row">
-                      <label>
-                        Preço (R$)
-                        <input
-                          type="number"
-                          min="0"
-                          max="10000"
-                          step="0.01"
-                          value={form.price}
-                          onChange={(e) =>
-                            setForm({ ...form, price: e.target.value })
-                          }
-                          required
-                        />
-                      </label>
-                      <label>
-                        Páginas
-                        <input
-                          type="number"
-                          min="1"
-                          max="5000"
-                          value={form.pages}
-                          onChange={(e) =>
-                            setForm({ ...form, pages: e.target.value })
-                          }
-                          required
-                        />
-                      </label>
-                    </div>
-                    <label>
-                      Descrição
-                      <textarea
-                        value={form.description}
-                        onChange={(e) =>
-                          setForm({ ...form, description: e.target.value })
-                        }
-                        required
-                        minLength={30}
-                        maxLength={5000}
-                        placeholder="Objetivos, público, conteúdo, referências e data de atualização."
-                      />
-                    </label>
-                    <label>
-                      Prévia pública
-                      <textarea
-                        value={form.preview}
-                        onChange={(e) =>
-                          setForm({ ...form, preview: e.target.value })
-                        }
-                        required
-                        minLength={50}
-                        maxLength={20000}
-                        placeholder="Compartilhe um trecho representativo do material."
-                      />
-                    </label>
-                    <label className="check-label">
-                      <input
-                        type="checkbox"
-                        checked={form.rights}
-                        onChange={(e) =>
-                          setForm({ ...form, rights: e.target.checked })
-                        }
-                        required
-                      />
-                      <span>
-                        Sou autor ou tenho autorização para comercializar este
-                        conteúdo, incluindo imagens e outros elementos.
-                      </span>
-                    </label>
-                    <EarningsPreview
-                      price={Math.max(
-                        0,
-                        Math.round(
-                          (Number(form.price.replace(",", ".")) || 0) * 100,
-                        ),
-                      )}
-                      policy={
-                        author.policy || { commission_bps: 2500, owned: 0 }
-                      }
-                    />
-                    <label className="check-label">
-                      <input
-                        type="checkbox"
-                        required
-                        checked={form.commercial_accepted}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            commercial_accepted: e.target.checked,
-                          })
-                        }
-                      />
-                      <span>
-                        Li e aceito a regra exibida acima, com os custos de
-                        processamento descontados antes da divisão. Serviços
-                        editoriais e descontos dependem de acordo específico. A
-                        simulação não garante o custo final.
-                      </span>
-                    </label>{" "}
-                    <button className="btn primary full" disabled={busy}>
-                      Salvar rascunho <Check size={16} />
-                    </button>
-                  </form>
-                </div>
-              </>
-            )}
+            <span className="eyebrow">CRIE, COMPARTILHE, RECEBA</span>
+            <h1>Espaço do autor.</h1>
+            {user ? <AuthorStudio /> : signedOut("Publique seus materiais")}
           </section>
         )}
+        {view === "notificacoes" &&
+          (user ? (
+            <NotificationCenter />
+          ) : (
+            signedOut("Acompanhe suas notificações")
+          ))}
         {view === "admin" && (
           <section className="container page-section">
             <div className="page-heading">
@@ -2196,6 +1825,9 @@ export default function Nimbus() {
                 </div>
                 <div className="tabs">
                   {[
+                    "aprovações",
+                    "indicadores",
+                    "operação",
                     "produtos",
                     "pedidos",
                     "pessoas",
@@ -2213,6 +1845,17 @@ export default function Nimbus() {
                     </button>
                   ))}
                 </div>
+                {adminTab === "aprovações" && (
+                  <EditorialPanel
+                    products={admin.products}
+                    onRefresh={async () => {
+                      setAdmin(await api("admin"));
+                      await loadCatalog();
+                    }}
+                  />
+                )}
+                {adminTab === "indicadores" && <AnalyticsPanel />}
+                {adminTab === "operação" && <OperationsPanel />}
                 {adminTab === "privacidade" && <PrivacyCenter admin signedIn />}
                 {adminTab === "financeiro" && (
                   <>
@@ -2710,6 +2353,15 @@ export default function Nimbus() {
                   do pedido. Os arquivos são armazenados em área protegida e sua
                   entrega depende de autorização no servidor.
                 </p>
+                <h2>Medição opcional</h2>
+                <p>
+                  Quando você permite, contamos visualizações, prévias e adições
+                  ao carrinho. Um identificador temporário da sessão é
+                  transformado em hash por evento, material e dia; o
+                  identificador original não é gravado no banco. Os relatórios
+                  são agregados. Você pode desativar a medição abaixo a qualquer
+                  momento para eventos futuros.
+                </p>
                 <h2>Armazenamento no navegador</h2>
                 <p>
                   O carrinho é salvo neste navegador para continuar a seleção
@@ -2728,12 +2380,15 @@ export default function Nimbus() {
                   implementados nesta versão.
                 </p>
                 <p>
-                  O acesso é fornecido pela hospedagem Sites/ChatGPT; banco e
-                  arquivos utilizam serviços Cloudflare. Pagamentos, quando
-                  ativados, utilizam Stripe. Fontes visuais são carregadas pelo
-                  Google Fonts, o que envolve comunicação do navegador com esse
-                  fornecedor. A operação deve validar as condições contratuais e
-                  eventuais transferências internacionais desses serviços.
+                  O acesso disponível utiliza Sites/ChatGPT e, quando
+                  configurado, Clerk para login por e-mail. Avisos transacionais
+                  utilizam Resend quando ativado; ficam também registrados na
+                  conta. Banco e arquivos utilizam serviços Cloudflare.
+                  Pagamentos, quando ativados, utilizam Stripe. Fontes visuais
+                  são carregadas pelo Google Fonts, o que envolve comunicação do
+                  navegador com esse fornecedor. A operação deve validar as
+                  condições contratuais e eventuais transferências
+                  internacionais desses serviços.
                 </p>
                 <p>
                   Materiais enviados não devem conter dados pessoais de
@@ -2742,6 +2397,7 @@ export default function Nimbus() {
                   pessoais ou imagens identificáveis sem análise e permissão
                   adequadas. Curso e instituição no perfil são opcionais.
                 </p>
+                <MeasurementPreferences always />
                 <h2>Solicitações sobre dados</h2>
                 <p>
                   Use o suporte autenticado para solicitar informações,
@@ -2767,6 +2423,7 @@ export default function Nimbus() {
           "termos",
           "privacidade",
           "sobre",
+          "notificacoes",
         ].includes(view) && (
           <Empty
             icon={<Search />}
@@ -2777,6 +2434,7 @@ export default function Nimbus() {
           />
         )}
       </main>
+      <MeasurementPreferences />
       <footer>
         <div className="container footer-grid">
           <div>
@@ -2937,7 +2595,60 @@ export default function Nimbus() {
             <div className="detail-preview">
               <span className="eyebrow">ANTES DE ESCOLHER, CONHEÇA</span>
               <h3>Uma prévia do conteúdo</h3>
+              <a
+                className="btn secondary small"
+                href={"/materiais/" + detail.id}
+              >
+                Abrir página do material ↗
+              </a>
+              {detail.author_slug && (
+                <a
+                  className="text-link"
+                  href={"/autores/" + detail.author_slug}
+                >
+                  Ver página do autor
+                </a>
+              )}
               <pre>{detail.preview}</pre>
+              {Array.from({ length: detail.preview_count || 0 }, (_, i) => (
+                <details
+                  key={i}
+                  onToggle={(e) => {
+                    if (e.currentTarget.open) metric(detail.id, "preview");
+                  }}
+                >
+                  <summary>Página de prévia {i + 1}</summary>
+                  <img
+                    className="material-preview"
+                    src={"/api/asset/" + detail.id + "/preview/" + i}
+                    alt={"Prévia " + (i + 1) + " de " + detail.title}
+                  />
+                </details>
+              ))}
+              {detail.objectives && (
+                <>
+                  <h3>O que você vai aprender</h3>
+                  <p className="pre-line">{detail.objectives}</p>
+                </>
+              )}
+              {detail.toc && (
+                <>
+                  <h3>Sumário</h3>
+                  <p className="pre-line">{detail.toc}</p>
+                </>
+              )}
+              {detail.sources && (
+                <>
+                  <h3>Referências</h3>
+                  <p className="pre-line">{detail.sources}</p>
+                </>
+              )}
+              {detail.reviewed_by && (
+                <p className="notice">
+                  Revisado por {detail.reviewed_by} em{" "}
+                  {date(detail.reviewed_at || "")}
+                </p>
+              )}
             </div>
             <div className="detail-reviews">
               <h3>
@@ -3028,12 +2739,17 @@ export default function Nimbus() {
             </button>
             <span className="eyebrow">MINHA BIBLIOTECA</span>
             <h2 id="reader-title">{reader.title}</h2>
-            <a
+            <button
               className="btn primary"
-              href={"/api/download/" + reader.product_id}
+              onClick={() =>
+                action(() =>
+                  downloadPrivate("/api/download/" + reader.product_id),
+                )
+              }
             >
               <Download size={17} /> Baixar meu arquivo
-            </a>
+            </button>
+            <VersionList productId={reader.product_id} />
             {reader.file_name ? (
               <div className="notice">
                 Abra o arquivo baixado no leitor do seu dispositivo. Suas
@@ -3092,6 +2808,16 @@ export default function Nimbus() {
   );
 }
 function Cover({ p, index }: { p: Product; index: number }) {
+  if (p.has_cover)
+    return (
+      <div className="cover custom-cover">
+        <img
+          src={"/api/asset/" + p.id + "/cover"}
+          alt={"Capa de " + p.title}
+          loading="lazy"
+        />
+      </div>
+    );
   const tone = [
     "violet",
     "peach",

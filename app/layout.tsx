@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import {AuthShell} from "@/components/auth-shell";
 export const metadata: Metadata = {
   title: "Nimbus — Conhecimento que fica",
   description:
@@ -12,7 +13,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body><AuthShell>{children}</AuthShell></body>
     </html>
   );
 }
