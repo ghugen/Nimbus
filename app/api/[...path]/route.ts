@@ -1,3 +1,12 @@
+import {
+  normalizeProduct,
+  areas,
+  levels,
+  languages,
+  legacyTypes,
+  fileTypes,
+  fileMime,
+} from "@/lib/taxonomy";
 import { env } from "cloudflare:workers";
 import { seed, categories, formats, type Product } from "@/lib/catalog";
 import { parseCart, validProduct, verifyStripe } from "@/lib/commerce";
@@ -22,6 +31,9 @@ function fail(message: string, status = 400): never {
   throw Object.assign(new Error(message), { status });
 }
 type Body = {
+  topic?: string;
+  level?: string;
+  language?: string;
   name: string;
   course: string;
   institution: string;
@@ -139,7 +151,7 @@ async function catalog() {
     "SELECT product_id,AVG(rating) rating,COUNT(*) review_count FROM reviews GROUP BY product_id",
   );
   return [...map.values()].map((p) => ({
-    ...p,
+    ...normalizeProduct(p),
     rating: ratings.find((r) => r.product_id === p.id)?.rating || 0,
     review_count: ratings.find((r) => r.product_id === p.id)?.review_count || 0,
   }));
@@ -444,7 +456,7 @@ async function dispatch(req: Request) {
       if (!file) fail("Arquivo indisponível. Contate o suporte.", 404);
       return new Response(file.body, {
         headers: {
-          "Content-Type": "application/pdf",
+          "Content-Type": fileMime(String(item.file_name || "material.pdf")),
           "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(String(item.file_name || "material.pdf"))}`,
           "Cache-Control": "private, no-store",
           "X-Content-Type-Options": "nosniff",
@@ -548,8 +560,30 @@ async function dispatch(req: Request) {
       validProduct({ ...b });
       if (b.rights !== true)
         fail("Confirme a autoria ou autorização de publicação.");
-      if (!categories.includes(b.category) || !formats.includes(b.format))
+      const legacyCourse = Object.values(areas).flat().includes(b.category)
+        ? b.category
+        : "";
+      const normalized = normalizeProduct({
+        category: b.category,
+        format: b.format,
+        course: b.course || legacyCourse,
+        level: b.level,
+        language: b.language,
+        created: now(),
+      });
+      b.category = normalized.category;
+      b.format = normalized.format;
+      if (
+        !categories.slice(1).includes(b.category) ||
+        !formats.includes(b.format)
+      )
         fail("Área ou formato inválido.");
+      if (
+        !areas[b.category].includes(normalized.course) ||
+        !levels.includes(normalized.level) ||
+        !languages.includes(normalized.language)
+      )
+        fail("Curso, nível ou idioma inválido.");
       const id = clean(b.id, 100) || uid();
       const existing = (await catalog()).find((p) => p.id === id);
       if (existing && existing.author_id !== u.id && !u.admin)
@@ -591,6 +625,15 @@ async function dispatch(req: Request) {
           "draft",
           now(),
         );
+      await run(
+        "UPDATE products SET course=?,level=?,language=?,updated=?,topic=? WHERE id=?",
+        normalized.course,
+        normalized.level,
+        normalized.language,
+        now(),
+        clean(b.topic, 120),
+        id,
+      );
       await log(u.id, "product.saved", id);
       return json({ ok: true, id });
     }
@@ -607,21 +650,25 @@ async function dispatch(req: Request) {
       !(file instanceof File) ||
       file.size > 20 * 1024 * 1024 ||
       file.size < 5 ||
-      file.type !== "application/pdf"
+      !fileTypes.includes(file.name.split(".").pop()?.toUpperCase() || "")
     )
-      fail("Envie um PDF de até 20 MB.");
+      fail("Envie um arquivo de formato aceito com até 20 MB.");
     const buffer = await file.arrayBuffer();
-    if (new TextDecoder().decode(buffer.slice(0, 5)) !== "%PDF-")
+    if (
+      file.name.toLowerCase().endsWith(".pdf") &&
+      new TextDecoder().decode(buffer.slice(0, 5)) !== "%PDF-"
+    )
       fail("Arquivo PDF inválido.");
-    const key = `materials/${id}/${uid()}.pdf`;
+    const key = `materials/${id}/${uid()}.${file.name.split(".").pop()?.toLowerCase()}`;
     await BUCKET.put(key, buffer, {
-      httpMetadata: { contentType: "application/pdf" },
+      httpMetadata: { contentType: fileMime(file.name) },
     });
     await run(
-      "UPDATE products SET file_key=?,file_name=?,status=? WHERE id=?",
+      "UPDATE products SET file_key=?,file_name=?,status=?,updated=? WHERE id=?",
       key,
       file.name.slice(0, 180),
       "pending",
+      now(),
       id,
     );
     await log(u.id, "product.submitted", id);
@@ -630,13 +677,13 @@ async function dispatch(req: Request) {
   if (path[0] === "admin-file" && path[1] && method === "GET") {
     await admin(req);
     const p = (await catalog()).find((p) => p.id === path[1]);
-    if (!p?.file_key) fail("PDF não encontrado.", 404);
+    if (!p?.file_key) fail("Arquivo não encontrado.", 404);
     const file = await BUCKET.get(p.file_key);
-    if (!file) fail("PDF não encontrado.", 404);
+    if (!file) fail("Arquivo não encontrado.", 404);
     return new Response(file.body, {
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": "attachment; filename=material-revisao.pdf",
+        "Content-Type": fileMime(p.file_name || "material.pdf"),
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(p.file_name || "material")}`,
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },
@@ -666,7 +713,7 @@ async function dispatch(req: Request) {
           fail("Status inválido.");
         const p = (await catalog()).find((p) => p.id === b.id);
         if (!p || p.demo || !p.file_key)
-          fail("Apenas materiais reais com PDF podem ser publicados.");
+          fail("Apenas materiais reais com arquivo podem ser publicados.");
         await run("UPDATE products SET status=? WHERE id=?", b.status, p.id);
         await log(u.id, `product.${b.status}`, p.id);
       } else if (b.action === "ticket") {

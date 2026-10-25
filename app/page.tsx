@@ -1,4 +1,13 @@
 "use client";
+import {
+  areas,
+  levels,
+  languages,
+  fileTypes,
+  subjects,
+  topRated,
+} from "@/lib/taxonomy";
+
 import { useState, useEffect, useMemo, type FormEvent } from "react";
 import {
   Search,
@@ -142,9 +151,13 @@ const emptyForm = {
   id: "",
   title: "",
   description: "",
-  category: "Medicina Veterinária",
+  category: "Saúde",
+  course: "Medicina Veterinária",
+  level: "Graduação",
+  language: "Português",
   subject: "",
-  format: "Resumo",
+  topic: "",
+  format: "Resumos e apostilas",
   price: "",
   pages: "",
   preview: "",
@@ -163,6 +176,16 @@ export default function Nimbus() {
     [format, setFormat] = useState("Todos"),
     [sort, setSort] = useState("relevancia"),
     [free, setFree] = useState(false),
+    [course, setCourse] = useState("Todos"),
+    [subject, setSubject] = useState(""),
+    [topic, setTopic] = useState(""),
+    [level, setLevel] = useState("Todos"),
+    [language, setLanguage] = useState("Todos"),
+    [fileType, setFileType] = useState("Todos"),
+    [minPrice, setMinPrice] = useState(""),
+    [maxPrice, setMaxPrice] = useState(""),
+    [updatedAfter, setUpdatedAfter] = useState(""),
+    [showcase, setShowcase] = useState("todos"),
     [favorites, setFavorites] = useState<string[]>([]),
     [cart, setCart] = useState<string[]>([]),
     [detail, setDetail] = useState<Product | null>(null),
@@ -332,9 +355,22 @@ export default function Nimbus() {
           (p) =>
             (category === categories[0] || p.category === category) &&
             (format === "Todos" || p.format === format) &&
+            (course === "Todos" || p.course === course) &&
+            (!topic ||
+              (p.topic || "").toLowerCase().includes(topic.toLowerCase())) &&
+            (!subject ||
+              p.subject.toLowerCase().includes(subject.toLowerCase())) &&
+            (level === "Todos" || p.level === level) &&
+            (language === "Todos" || p.language === language) &&
+            (fileType === "Todos" || p.file_format === fileType) &&
+            (!minPrice || p.price >= Number(minPrice) * 100) &&
+            (!maxPrice || p.price <= Number(maxPrice) * 100) &&
+            (!updatedAfter ||
+              (p.updated || p.created).slice(0, 10) >= updatedAfter) &&
+            (showcase !== "avaliados" || topRated(p)) &&
             (!free || p.price === 0) &&
             (view !== "favoritos" || favorites.includes(p.id)) &&
-            `${p.title} ${p.subject} ${p.author} ${p.category}`
+            `${p.title} ${p.subject} ${p.author} ${p.category} ${p.course} ${p.topic || ""}`
               .toLocaleLowerCase("pt-BR")
               .normalize("NFD")
               .replace(/[\u0300-\u036f]/g, "")
@@ -346,15 +382,39 @@ export default function Nimbus() {
               ),
         )
         .sort((a, b) =>
-          sort === "menor"
-            ? a.price - b.price
-            : sort === "maior"
-              ? b.price - a.price
-              : sort === "recentes"
-                ? b.created.localeCompare(a.created)
-                : 0,
+          showcase === "avaliados"
+            ? (b.rating || 0) - (a.rating || 0) ||
+              (b.review_count || 0) - (a.review_count || 0)
+            : sort === "menor"
+              ? a.price - b.price
+              : sort === "maior"
+                ? b.price - a.price
+                : sort === "recentes"
+                  ? (b.updated || b.created).localeCompare(
+                      a.updated || a.created,
+                    )
+                  : 0,
         ),
-    [products, category, format, free, query, sort, view, favorites],
+    [
+      products,
+      category,
+      format,
+      free,
+      query,
+      sort,
+      view,
+      favorites,
+      course,
+      subject,
+      topic,
+      level,
+      language,
+      fileType,
+      minPrice,
+      maxPrice,
+      updatedAfter,
+      showcase,
+    ],
   );
   const cartItems = cart
     .map((id) => products.find((p) => p.id === id))
@@ -807,16 +867,19 @@ export default function Nimbus() {
               </div>
               <div className="areas">
                 {categories.slice(1).map((c, i) => {
-                  const Icon = icons[i + 1];
+                  const Icon = icons[(i + 1) % icons.length];
                   return (
                     <button
                       key={c}
                       onClick={() => {
                         setCategory(c);
+                        setCourse("Todos");
+                        setSubject("");
+                        setTopic("");
                         go("catalogo");
                       }}
                     >
-                      <span className={"area-icon tone" + i}>
+                      <span className={"area-icon tone" + (i % 6)}>
                         <Icon size={24} />
                       </span>
                       <strong>{c}</strong>
@@ -841,8 +904,36 @@ export default function Nimbus() {
                 experiência Nimbus. Os itens pagos abaixo são demonstrativos; o
                 guia gratuito já pode ser adquirido.
               </div>
+              <div className="tabs showcases">
+                {[
+                  ["gratuitos", "Gratuitos"],
+                  ["novidades", "Novidades"],
+                  ["avaliados", "Mais bem avaliados"],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setShowcase(key);
+                      setFree(key === "gratuitos");
+                      setSort(key === "novidades" ? "recentes" : "relevancia");
+                      go("catalogo");
+                    }}
+                  >
+                    {label} <ArrowUpRight size={13} />
+                  </button>
+                ))}
+              </div>
               <div className="product-grid">
-                {products.slice(0, 4).map((p, i) => renderCard(p, i))}
+                {[
+                  ...products.filter(
+                    (p) => p.course === "Medicina Veterinária",
+                  ),
+                  ...products.filter(
+                    (p) => p.course !== "Medicina Veterinária",
+                  ),
+                ]
+                  .slice(0, 4)
+                  .map((p, i) => renderCard(p, i))}
               </div>
               {!loaded && (
                 <div className="loading">
@@ -972,13 +1063,56 @@ export default function Nimbus() {
                         <button
                           key={c}
                           className={category === c ? "active" : ""}
-                          onClick={() => setCategory(c)}
+                          onClick={() => {
+                            setCategory(c);
+                            setCourse("Todos");
+                            setSubject("");
+                            setTopic("");
+                          }}
                         >
                           <span className="radio" />
                           {c}
                         </button>
                       ))}
                     </div>
+                    <label htmlFor="course-filter">Curso</label>
+                    <select
+                      id="course-filter"
+                      value={course}
+                      onChange={(e) => {
+                        setCourse(e.target.value);
+                        setSubject("");
+                        setTopic("");
+                      }}
+                    >
+                      <option>Todos</option>
+                      {(category === categories[0]
+                        ? Object.values(areas).flat()
+                        : areas[category] || []
+                      ).map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </select>
+                    <label htmlFor="subject-filter">Disciplina</label>
+                    <input
+                      id="subject-filter"
+                      list="subject-suggestions"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="Ex.: Patologia"
+                    />
+                    <datalist id="subject-suggestions">
+                      {(subjects[course] || []).map((t) => (
+                        <option key={t}>{t}</option>
+                      ))}
+                    </datalist>
+                    <label htmlFor="topic-filter">Assunto específico</label>
+                    <input
+                      id="topic-filter"
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                      placeholder="Ex.: Sistema respiratório"
+                    />{" "}
                     <label htmlFor="format">Tipo de material</label>
                     <select
                       id="format"
@@ -990,6 +1124,71 @@ export default function Nimbus() {
                         <option key={f}>{f}</option>
                       ))}
                     </select>
+                    {[
+                      {
+                        label: "Nível de ensino",
+                        value: level,
+                        set: setLevel,
+                        options: levels,
+                      },
+                      {
+                        label: "Idioma",
+                        value: language,
+                        set: setLanguage,
+                        options: languages,
+                      },
+                      {
+                        label: "Formato do arquivo",
+                        value: fileType,
+                        set: setFileType,
+                        options: fileTypes,
+                      },
+                    ].map((f) => (
+                      <div className="extra-filter" key={f.label}>
+                        <label>
+                          {f.label}
+                          <select
+                            value={f.value}
+                            onChange={(e) => f.set(e.target.value)}
+                          >
+                            <option>Todos</option>
+                            {f.options.map((x) => (
+                              <option key={x}>{x}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    ))}
+                    <div className="price-filters">
+                      <label>
+                        Preço mínimo (R$)
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={minPrice}
+                          onChange={(e) => setMinPrice(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Preço máximo (R$)
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={maxPrice}
+                          onChange={(e) => setMaxPrice(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <label>
+                      Atualizados a partir de
+                      <input
+                        type="date"
+                        value={updatedAfter}
+                        onChange={(e) => setUpdatedAfter(e.target.value)}
+                      />
+                    </label>
                     <label className="check-label">
                       <input
                         type="checkbox"
@@ -1003,6 +1202,16 @@ export default function Nimbus() {
                       onClick={() => {
                         setCategory(categories[0]);
                         setFormat("Todos");
+                        setCourse("Todos");
+                        setSubject("");
+                        setTopic("");
+                        setLevel("Todos");
+                        setLanguage("Todos");
+                        setFileType("Todos");
+                        setMinPrice("");
+                        setMaxPrice("");
+                        setUpdatedAfter("");
+                        setShowcase("todos");
                         setFree(false);
                         setQuery("");
                       }}
@@ -1016,6 +1225,38 @@ export default function Nimbus() {
                     </div>
                   </aside>
                   <div>
+                    <div
+                      className="tabs showcases"
+                      aria-label="Vitrines do catálogo"
+                    >
+                      {[
+                        ["todos", "Todos os materiais"],
+                        ["gratuitos", "Gratuitos"],
+                        ["novidades", "Novidades"],
+                        ["avaliados", "Mais bem avaliados"],
+                      ].map(([key, label]) => (
+                        <button
+                          key={key}
+                          className={showcase === key ? "active" : ""}
+                          onClick={() => {
+                            setShowcase(key);
+                            setFree(key === "gratuitos");
+                            setSort(
+                              key === "novidades" ? "recentes" : "relevancia",
+                            );
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {showcase === "avaliados" && (
+                      <p className="notice">
+                        Materiais reais com pelo menos 3 avaliações e média
+                        mínima de 4 estrelas. Ainda sem avaliações suficientes?
+                        A vitrine permanece vazia.
+                      </p>
+                    )}{" "}
                     <div className="catalog-toolbar">
                       <div className="search-input">
                         <Search size={18} />
@@ -1090,7 +1331,9 @@ export default function Nimbus() {
                       <div>
                         <span className="eyebrow">{p.format}</span>
                         <h3>{p.title}</h3>
-                        <small>{p.category}</small>
+                        <small>
+                          {p.category} · {p.course}
+                        </small>
                         {p.demo === 1 && p.price > 0 && (
                           <span className="warning-label">
                             Demonstrativo · indisponível para compra
@@ -1517,7 +1760,7 @@ export default function Nimbus() {
                   <Stat
                     icon={<ShieldCheck />}
                     value="02"
-                    label="Envie o PDF para aprovação"
+                    label="Envie o arquivo para aprovação"
                   />
                   <Stat
                     icon={<BarChart3 />}
@@ -1569,7 +1812,7 @@ export default function Nimbus() {
                               {money(p.price)} · {p.format}
                             </p>
                             <small>
-                              {p.file_name || "PDF ainda não enviado"}
+                              {p.file_name || "arquivo ainda não enviado"}
                             </small>
                           </div>
                           <button
@@ -1580,7 +1823,11 @@ export default function Nimbus() {
                                 title: p.title,
                                 description: p.description,
                                 category: p.category,
+                                course: p.course || "",
+                                level: p.level || "Graduação",
+                                language: p.language || "Português",
                                 subject: p.subject,
+                                topic: p.topic || "",
                                 format: p.format,
                                 price: (p.price / 100).toFixed(2),
                                 pages: String(p.pages),
@@ -1596,10 +1843,12 @@ export default function Nimbus() {
                           </button>
                           <label className="upload-label">
                             <Upload size={15} />{" "}
-                            {p.file_key ? "Substituir PDF" : "Enviar PDF"}
+                            {p.file_key
+                              ? "Substituir arquivo"
+                              : "Enviar arquivo (até 20 MB)"}
                             <input
                               type="file"
-                              accept="application/pdf"
+                              accept=".pdf,.txt,.docx,.xlsx,.pptx,.png,.jpg,.zip,.mp4,.mp3"
                               disabled={busy}
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
@@ -1616,7 +1865,7 @@ export default function Nimbus() {
                                     (await r.json()) as ApiResponse;
                                   if (!r.ok) throw new Error(result.error);
                                   setAuthor(await api("author"));
-                                  notify("PDF enviado para aprovação.");
+                                  notify("arquivo enviado para aprovação.");
                                 });
                               }}
                             />
@@ -1627,7 +1876,7 @@ export default function Nimbus() {
                       <Empty
                         icon={<PenLine />}
                         title="O próximo autor pode ser você."
-                        text="Preencha os dados ao lado, salve e envie seu PDF."
+                        text="Preencha os dados ao lado, salve e envie seu arquivo."
                       />
                     )}
                   </div>
@@ -1647,14 +1896,14 @@ export default function Nimbus() {
                         setAuthor(await api("author"));
                         setForm({ ...emptyForm, id: result.id });
                         notify(
-                          "Rascunho salvo. Agora envie o PDF em Meus materiais.",
+                          "Rascunho salvo. Agora envie o arquivo em Meus materiais.",
                         );
                       });
                     }}
                   >
                     <h2>{form.id ? "Editar material" : "Novo material"}</h2>
                     <p>
-                      Primeiro salve o rascunho. Depois, envie o PDF para
+                      Primeiro salve o rascunho. Depois, envie o arquivo para
                       análise.
                     </p>
                     <label>
@@ -1675,7 +1924,11 @@ export default function Nimbus() {
                         <select
                           value={form.category}
                           onChange={(e) =>
-                            setForm({ ...form, category: e.target.value })
+                            setForm({
+                              ...form,
+                              category: e.target.value,
+                              course: areas[e.target.value][0],
+                            })
                           }
                         >
                           {categories.slice(1).map((c) => (
@@ -1684,7 +1937,7 @@ export default function Nimbus() {
                         </select>
                       </label>
                       <label>
-                        Formato
+                        Tipo de material
                         <select
                           value={form.format}
                           onChange={(e) =>
@@ -1697,8 +1950,49 @@ export default function Nimbus() {
                         </select>
                       </label>
                     </div>
+                    <div className="form-row">
+                      <label>
+                        Curso
+                        <select
+                          value={form.course}
+                          onChange={(e) =>
+                            setForm({ ...form, course: e.target.value })
+                          }
+                        >
+                          {(areas[form.category] || []).map((c) => (
+                            <option key={c}>{c}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Nível de ensino
+                        <select
+                          value={form.level}
+                          onChange={(e) =>
+                            setForm({ ...form, level: e.target.value })
+                          }
+                        >
+                          {levels.map((c) => (
+                            <option key={c}>{c}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
                     <label>
-                      Disciplina / assunto
+                      Idioma
+                      <select
+                        value={form.language}
+                        onChange={(e) =>
+                          setForm({ ...form, language: e.target.value })
+                        }
+                      >
+                        {languages.map((c) => (
+                          <option key={c}>{c}</option>
+                        ))}
+                      </select>
+                    </label>{" "}
+                    <label>
+                      Disciplina
                       <input
                         value={form.subject}
                         onChange={(e) =>
@@ -1708,6 +2002,17 @@ export default function Nimbus() {
                         maxLength={100}
                       />
                     </label>
+                    <label>
+                      Assunto específico (opcional)
+                      <input
+                        value={form.topic}
+                        onChange={(e) =>
+                          setForm({ ...form, topic: e.target.value })
+                        }
+                        maxLength={120}
+                        placeholder="Ex.: Sistema respiratório"
+                      />
+                    </label>{" "}
                     <div className="form-row">
                       <label>
                         Preço (R$)
@@ -1884,7 +2189,7 @@ export default function Nimbus() {
                                     target="_blank"
                                     rel="noreferrer"
                                   >
-                                    Revisar PDF <ArrowUpRight size={12} />
+                                    Revisar arquivo <ArrowUpRight size={12} />
                                   </a>
                                   <button
                                     className="btn secondary small"
@@ -2097,7 +2402,7 @@ export default function Nimbus() {
                   ],
                   [
                     "Os materiais do catálogo já estão à venda?",
-                    "Nesta etapa há itens demonstrativos, identificados nas páginas. O guia gratuito pode ser adquirido para experimentar o fluxo. Materiais reais precisam de PDF e aprovação para serem publicados.",
+                    "Nesta etapa há itens demonstrativos, identificados nas páginas. O guia gratuito pode ser adquirido para experimentar o fluxo. Materiais reais precisam de arquivo e aprovação para serem publicados.",
                   ],
                   [
                     "Quais pagamentos são aceitos?",
@@ -2105,7 +2410,7 @@ export default function Nimbus() {
                   ],
                   [
                     "Posso vender meus próprios materiais?",
-                    "Sim. Na área Para autores, salve um rascunho e envie seu PDF original ou autorizado. A publicação depende de aprovação. Condições de remuneração e repasse precisam ser combinadas antes da comercialização.",
+                    "Sim. Na área Para autores, salve um rascunho e envie seu arquivo original ou autorizado. A publicação depende de aprovação. Condições de remuneração e repasse precisam ser combinadas antes da comercialização.",
                   ],
                   [
                     "Como solicito ajuda com uma compra?",
@@ -2442,7 +2747,8 @@ export default function Nimbus() {
               </div>
               <div>
                 <span className="eyebrow">
-                  {detail.category} / {detail.format}
+                  {detail.category} / {detail.course} / {detail.subject}
+                  {detail.topic ? ` / ${detail.topic}` : ""} / {detail.format}
                 </span>
                 <h2 id="detail-title">{detail.title}</h2>
                 <p>{detail.description}</p>
@@ -2603,8 +2909,8 @@ export default function Nimbus() {
             </a>
             {reader.file_name ? (
               <div className="notice">
-                Abra o PDF baixado no leitor do seu dispositivo. Suas anotações
-                ficam salvas aqui.
+                Abra o arquivo baixado no leitor do seu dispositivo. Suas
+                anotações ficam salvas aqui.
               </div>
             ) : (
               <pre className="free-reader">

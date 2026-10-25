@@ -251,6 +251,52 @@ try {
       "Prévia de teste com conteúdo original e informações suficientes para conhecer o material.",
     rights: true,
   };
+  await expectStatus(
+    "author",
+    {
+      body: {
+        ...material,
+        category: "Saúde",
+        course: "Direito",
+        format: "Resumos e apostilas",
+      },
+    },
+    400,
+  );
+  for (const kind of [
+    "Resumos e apostilas",
+    "Mapas mentais e esquemas",
+    "Questões e simulados",
+    "Flashcards",
+    "Atlas e materiais ilustrados",
+    "Guias práticos",
+    "Casos para estudo",
+    "Modelos e ferramentas",
+    "Revisões para provas",
+    "Kits e coleções",
+  ])
+    await expectStatus(
+      "author",
+      {
+        body: {
+          ...material,
+          category: "Saúde",
+          course: "Medicina Veterinária",
+          format: kind,
+          topic: "Sistema respiratório",
+          level: "Pós-graduação",
+          language: "Português",
+        },
+      },
+      200,
+    );
+  const authorMetadata = (await (await call("author")).json()).products.find(
+    (p) => p.topic === "Sistema respiratório",
+  );
+  assert.equal(authorMetadata.category, "Saúde");
+  assert.equal(authorMetadata.course, "Medicina Veterinária");
+  assert.equal(authorMetadata.level, "Pós-graduação");
+  checks++;
   const saved = await (
     await expectStatus("author", { body: material }, 200)
   ).json();

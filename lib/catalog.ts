@@ -1,20 +1,6 @@
-export const categories = [
-  "Todas as áreas",
-  "Medicina Veterinária",
-  "Medicina",
-  "Direito",
-  "Engenharia",
-  "Administração",
-  "Ciências Biológicas",
-];
-export const formats = [
-  "Resumo",
-  "Mapa mental",
-  "Questões comentadas",
-  "Guia prático",
-  "Flashcards",
-  "Atlas",
-];
+import { areas, materialTypes, normalizeProduct } from "./taxonomy";
+export const categories = ["Todas as áreas", ...Object.keys(areas)];
+export const formats = materialTypes;
 export type Product = {
   id: string;
   author_id: string;
@@ -32,6 +18,12 @@ export type Product = {
   file_name: string | null;
   demo: number;
   created: string;
+  topic?: string;
+  course?: string;
+  level?: string;
+  language?: string;
+  updated?: string;
+  file_format?: string;
   rating?: number;
   review_count?: number;
 };
@@ -126,27 +118,30 @@ const items = [
   ],
 ];
 export const seed: Product[] = items.map(
-  ([id, title, description, category, subject, format, price, pages]) => ({
-    id: String(id),
-    title: String(title),
-    description: String(description),
-    category: String(category),
-    subject: String(subject),
-    format: String(format),
-    price: Number(price),
-    pages: Number(pages),
-    author: "Equipe Nimbus · demonstração",
-    author_id: "nimbus",
-    preview:
-      id === "metodo"
-        ? `ESTUDAR COM INTENÇÃO\n\nUm guia introdutório da Nimbus\n\n1. Defina um objetivo observável\nAntes de começar, escreva o que deseja conseguir explicar ou resolver ao final da sessão. Divida um tema amplo em perguntas menores.\n\n2. Tente recordar antes de consultar\nApós a leitura, feche o material e escreva o que lembra. Compare sua resposta com a fonte e marque as lacunas.\n\n3. Distribua a revisão\nReserve novas sessões para retomar o assunto. Ajuste o intervalo conforme sua dificuldade, em vez de repetir apenas o que já domina.\n\n4. Pratique com feedback\nResolva uma questão, explique sua escolha e confira o raciocínio. Transforme erros em perguntas para a próxima revisão.\n\nPLANO DE SESSÃO\nObjetivo: ______\nPerguntas principais: ______\nO que consegui explicar: ______\nO que preciso retomar: ______\nPróxima revisão: ______\n\nEste guia é um material demonstrativo original de organização de estudos; não representa garantia de desempenho.`
-        : `${title}\n\n${description}\n\nPRÉVIA DE DEMONSTRAÇÃO\nEste item ilustra a organização do catálogo Nimbus. O material comercial completo ainda não está disponível. O número de páginas e o preço são ilustrativos.\n\nO que um material publicado deverá apresentar:\n• Objetivos de aprendizagem\n• Conceitos explicados com clareza\n• Exemplos e aplicações\n• Perguntas para revisão\n• Referências e data de atualização\n\nNenhuma avaliação ou credencial profissional foi atribuída a este conteúdo.`,
-    status: "published",
-    file_key: null,
-    file_name: null,
-    demo: 1,
-    created: "2026-10-25T00:00:00.000Z",
-  }),
+  ([id, title, description, category, subject, format, price, pages]) =>
+    normalizeProduct({
+      id: String(id),
+      title: String(title),
+      description: String(description),
+      category: id === "metodo" ? "Formação acadêmica geral" : String(category),
+      course: id === "metodo" ? "Formação acadêmica geral" : String(category),
+      subject: String(subject),
+      format: String(format),
+      price: Number(price),
+      pages: Number(pages),
+      author: "Equipe Nimbus · demonstração",
+      author_id: "nimbus",
+      preview:
+        id === "metodo"
+          ? `ESTUDAR COM INTENÇÃO\n\nUm guia introdutório da Nimbus\n\n1. Defina um objetivo observável\nAntes de começar, escreva o que deseja conseguir explicar ou resolver ao final da sessão. Divida um tema amplo em perguntas menores.\n\n2. Tente recordar antes de consultar\nApós a leitura, feche o material e escreva o que lembra. Compare sua resposta com a fonte e marque as lacunas.\n\n3. Distribua a revisão\nReserve novas sessões para retomar o assunto. Ajuste o intervalo conforme sua dificuldade, em vez de repetir apenas o que já domina.\n\n4. Pratique com feedback\nResolva uma questão, explique sua escolha e confira o raciocínio. Transforme erros em perguntas para a próxima revisão.\n\nPLANO DE SESSÃO\nObjetivo: ______\nPerguntas principais: ______\nO que consegui explicar: ______\nO que preciso retomar: ______\nPróxima revisão: ______\n\nEste guia é um material demonstrativo original de organização de estudos; não representa garantia de desempenho.`
+          : `${title}\n\n${description}\n\nPRÉVIA DE DEMONSTRAÇÃO\nEste item ilustra a organização do catálogo Nimbus. O material comercial completo ainda não está disponível. O número de páginas e o preço são ilustrativos.\n\nO que um material publicado deverá apresentar:\n• Objetivos de aprendizagem\n• Conceitos explicados com clareza\n• Exemplos e aplicações\n• Perguntas para revisão\n• Referências e data de atualização\n\nNenhuma avaliação ou credencial profissional foi atribuída a este conteúdo.`,
+      status: "published",
+      file_key: null,
+      file_name: null,
+      file_format: id === "metodo" ? "TXT" : "PDF",
+      demo: 1,
+      created: "2026-10-25T00:00:00.000Z",
+    }),
 );
 export function money(cents: number) {
   return new Intl.NumberFormat("pt-BR", {

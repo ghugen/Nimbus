@@ -130,3 +130,20 @@ Referências: [Stripe Checkout](https://docs.stripe.com/checkout/fulfillment) e 
 ## Próximas etapas comerciais
 
 Conectar a conta de pagamentos, definir os termos finais e os dados do operador, cadastrar o catálogo autorizado e validar o ciclo de compra/reembolso no ambiente Stripe de testes. Abrir a plataforma ao público somente depois dessas etapas.
+
+## Organização do catálogo — atualização
+
+O catálogo agora separa **9 áreas**, cursos, disciplina, assunto específico e **10 tipos de material**. Classificações anteriores são convertidas na leitura sem alterar pedidos e arquivos já adquiridos. O cadastro de autores persiste curso, nível, idioma e data de atualização. A página inicial dá prioridade aos exemplos de Medicina Veterinária.
+
+Filtros combináveis: área, curso, disciplina, assunto, tipo de material, nível, idioma, formato do arquivo, faixa de preço e atualização. As vitrines incluem gratuitos, novidades (por atualização) e mais bem avaliados. Esta última exige material não demonstrativo, pelo menos três avaliações e média mínima de quatro estrelas; não há avaliações fictícias.
+
+Tipos: resumos e apostilas; mapas mentais e esquemas; questões e simulados; flashcards; atlas e materiais ilustrados; guias práticos; casos para estudo; modelos e ferramentas; revisões para provas; kits e coleções. Kits são arquivos completos enviados pelo autor (por exemplo, ZIP), sem geração automática de pacotes com produtos individuais.
+
+Envio e entrega protegida aceitam PDF, TXT, DOCX, XLSX, PPTX, PNG, JPG, ZIP, MP4 e MP3, até **20 MB por material**. O arquivo é baixado no dispositivo; não há reprodutor de vídeo ou editor de planilhas integrado. O tipo é inferido da extensão, com verificação de assinatura para PDFs; aprovação editorial continua necessária.
+
+Em instalações locais existentes, após reconstruir a aplicação, aplique também, em ordem, as novas migrações não aplicadas:
+
+```bash
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_useful_rafael_vega.sql
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0003_true_gideon.sql
+```

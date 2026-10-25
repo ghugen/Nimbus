@@ -43,3 +43,34 @@ test("webhook válido, corpo adulterado, assinatura falsa e expirada", async () 
   );
   assert.equal(await verifyStripe(body, "", secret, time), false);
 });
+
+import {
+  normalizeProduct,
+  topRated,
+  materialTypes,
+  areas,
+  fileMime,
+} from "../lib/taxonomy.ts";
+test("classificação antiga mantém curso e usa área e tipo novos", () => {
+  const p = normalizeProduct({
+    category: "Medicina Veterinária",
+    format: "Resumo",
+    created: "2026-10-25",
+  });
+  assert.equal(p.category, "Saúde");
+  assert.equal(p.course, "Medicina Veterinária");
+  assert.equal(p.format, "Resumos e apostilas");
+  assert.equal(p.level, "Graduação");
+  assert.equal(materialTypes.length, 10);
+  assert.equal(Object.keys(areas).length, 9);
+  assert.equal(
+    fileMime("planilha.xlsx"),
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+});
+test("vitrine de avaliações exige dados reais e amostra suficiente", () => {
+  assert.equal(topRated({ demo: 1, rating: 5, review_count: 100 }), false);
+  assert.equal(topRated({ demo: 0, rating: 5, review_count: 2 }), false);
+  assert.equal(topRated({ demo: 0, rating: 3.9, review_count: 10 }), false);
+  assert.equal(topRated({ demo: 0, rating: 4, review_count: 3 }), true);
+});

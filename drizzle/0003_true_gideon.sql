@@ -1,0 +1,1 @@
+ALTER TABLE `products` ADD `topic` text DEFAULT '' NOT NULL;

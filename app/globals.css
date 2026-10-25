@@ -3873,3 +3873,76 @@ td .btn {
     transition: none !important;
   }
 }
+.filters input:not([type="checkbox"]),
+.extra-filter select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #e6e0ec;
+  border-radius: 7px;
+  padding: 9px;
+  color: #655773;
+  background: white;
+  font-size: 11px;
+}
+.extra-filter {
+  margin: 15px 0;
+}
+.extra-filter label,
+.price-filters label {
+  font-size: 10px;
+  color: #7e6f8d;
+  display: block;
+}
+.extra-filter select,
+.price-filters input {
+  display: block;
+  margin-top: 7px;
+}
+.price-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 15px;
+}
+.showcases {
+  margin-top: 0;
+}
+.showcases button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.areas {
+  grid-template-columns: repeat(3, 1fr);
+}
+.areas .area-icon {
+  margin-right: 0;
+}
+.areas > button {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.areas strong {
+  white-space: normal;
+}
+.detail-facts {
+  flex-wrap: wrap;
+}
+@media (max-width: 600px) {
+  .areas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .filters > .extra-filter,
+  .filters > .price-filters {
+    flex: 1 1 40%;
+    min-width: 0;
+    margin: 0;
+  }
+  .filters > label:has(input[type="date"]) {
+    width: 100%;
+    margin: 0;
+  }
+  .filters > .filter-options {
+    flex-basis: 100%;
+  }
+}
