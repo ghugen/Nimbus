@@ -1,7 +1,9 @@
+import { freeGuides } from "./free-guides";
 import { areas, materialTypes, normalizeProduct } from "./taxonomy";
 export const categories = ["Todas as áreas", ...Object.keys(areas)];
 export const formats = materialTypes;
 export type Product = {
+  public_download?: string;
   id: string;
   author_id: string;
   objectives?: string;
@@ -157,6 +159,33 @@ export const seed: Product[] = items.map(
       demo: 1,
       created: "2026-10-25T00:00:00.000Z",
     }),
+);
+seed.push(
+  ...freeGuides.map((g) =>
+    normalizeProduct({
+      id: g.id,
+      title: g.title,
+      description: g.description,
+      category: "Formação acadêmica geral",
+      course: "Formação acadêmica geral",
+      subject: g.subject,
+      format: g.format,
+      price: 0,
+      pages: g.pages,
+      author: "Equipe Nimbus",
+      author_id: "nimbus",
+      preview:
+        g.description +
+        "\n\nPDF original de três páginas: orientações práticas, exemplo e folha de atividade.",
+      status: "published",
+      file_key: null,
+      file_name: null,
+      file_format: "PDF",
+      demo: 1,
+      created: "2026-10-25T00:00:00.000Z",
+      public_download: g.url,
+    } as Product),
+  ),
 );
 export function money(cents: number) {
   return new Intl.NumberFormat("pt-BR", {

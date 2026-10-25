@@ -1,4 +1,13 @@
 "use client";
+import { CommercialPlan } from "@/components/commercial-plan";
+import { FreeDownloads } from "@/components/free-downloads";
+import {
+  CommunityPanel,
+  CollectionsPanel,
+  CollectionsAdmin,
+  CouponsAdmin,
+  CouponInput,
+} from "@/components/growth-panels";
 import { AuthorStudio } from "@/components/author-studio";
 import {
   NotificationCenter,
@@ -188,6 +197,12 @@ const emptyForm = {
   commercial_accepted: false,
 };
 export default function Nimbus() {
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [coupon, setCoupon] = useState<{
+    code: string;
+    discount: number;
+    total: number;
+  } | null>(null);
   const [view, setView] = useState("inicio"),
     [products, setProducts] = useState<Product[]>([]),
     [user, setUser] = useState<User | null>(null),
@@ -605,6 +620,12 @@ export default function Nimbus() {
             className={mobile ? "mobile-open" : ""}
             aria-label="Navegação principal"
           >
+            <button
+              className={view === "colecoes" ? "selected" : ""}
+              onClick={() => go("colecoes")}
+            >
+              Coleções
+            </button>
             <button
               className={view === "inicio" ? "selected" : ""}
               onClick={() => go("inicio")}
@@ -1353,6 +1374,26 @@ export default function Nimbus() {
             )}
           </section>
         )}
+        {view === "gratuitos" && <FreeDownloads />}
+        {view === "colecoes" && <CollectionsPanel />}
+        {view === "interesses" && (
+          <section className="container page-section">
+            {user ? (
+              <CommunityPanel kind="requests" />
+            ) : (
+              signedOut("Sugira seu próximo material")
+            )}
+          </section>
+        )}
+        {view === "correcoes" && (
+          <section className="container page-section">
+            {user ? (
+              <CommunityPanel kind="issues" />
+            ) : (
+              signedOut("Acompanhe suas correções")
+            )}
+          </section>
+        )}
         {view === "carrinho" && (
           <section className="container page-section">
             <div className="page-heading">
@@ -1412,10 +1453,20 @@ export default function Nimbus() {
                     <span>Entrega digital</span>
                     <span>Na sua biblioteca</span>
                   </div>
+                  {user && <CouponInput ids={cart} onApplied={setCoupon} />}
+                  {coupon && (
+                    <div>
+                      <span>Desconto · {coupon.code}</span>
+                      <strong>−{money(coupon.discount)}</strong>
+                    </div>
+                  )}
                   <div className="total">
                     <span>Total</span>
                     <strong>
-                      {money(cartItems.reduce((s, p) => s + p.price, 0))}
+                      {money(
+                        coupon?.total ??
+                          cartItems.reduce((s, p) => s + p.price, 0),
+                      )}
                     </strong>
                   </div>
                   <label className="check-label">
@@ -1449,19 +1500,25 @@ export default function Nimbus() {
                         busy ||
                         !accepted ||
                         cartItems.some(
-                          (p) => p.price > 0 && (p.demo || !payments),
+                          (p) =>
+                            p.price > 0 &&
+                            (p.demo || (!payments && coupon?.total !== 0)),
                         )
                       }
                       onClick={() =>
                         action(async () => {
                           const key =
-                            "nimbus-checkout:" + cart.toSorted().join(",");
+                            "nimbus-checkout:" +
+                            cart.toSorted().join(",") +
+                            ":" +
+                            (coupon?.code || "");
                           let request_id = sessionStorage.getItem(key);
                           if (!request_id) {
                             request_id = crypto.randomUUID();
                             sessionStorage.setItem(key, request_id);
                           }
                           const result = await api("checkout", {
+                            coupon: coupon?.code,
                             ids: cart,
                             accepted,
                             request_id,
@@ -1571,48 +1628,85 @@ export default function Nimbus() {
                     depende do retorno do provedor de pagamento.
                   </div>
                 )}
+                <div className="library-search">
+                  <label htmlFor="library-search">
+                    Buscar na minha biblioteca
+                  </label>
+                  <input
+                    id="library-search"
+                    type="search"
+                    placeholder="Título, disciplina, tema ou suas anotações…"
+                    value={libraryQuery}
+                    onChange={(e) => setLibraryQuery(e.target.value)}
+                  />
+                </div>
                 <h2 className="subheading">Continue de onde parou</h2>
                 {library.length ? (
                   <div className="library-grid">
-                    {library.map((item) => (
-                      <article
-                        className="panel library-card"
-                        key={item.product_id}
-                      >
-                        <span className="library-icon">
-                          <BookOpen size={28} />
-                        </span>
-                        <span className="eyebrow">
-                          ADICIONADO EM {date(item.created)}
-                        </span>
-                        <h3>{item.title}</h3>
-                        <div className="progress-label">
-                          <span>Minha revisão</span>
-                          <strong>{item.progress || 0}%</strong>
-                        </div>
-                        <div className="progress-track">
-                          <span style={{ width: (item.progress || 0) + "%" }} />
-                        </div>
-                        <button
-                          className="btn primary full"
-                          onClick={() => openReader(item)}
+                    {library
+                      .filter((item) => {
+                        const p = products.find(
+                          (p) => p.id === item.product_id,
+                        );
+                        return [
+                          item.title,
+                          item.notes,
+                          p?.subject,
+                          p?.course,
+                          p?.topic,
+                        ]
+                          .join(" ")
+                          .normalize("NFD")
+                          .replace(/[\u0300-\u036f]/g, "")
+                          .toLowerCase()
+                          .includes(
+                            libraryQuery
+                              .normalize("NFD")
+                              .replace(/[\u0300-\u036f]/g, "")
+                              .toLowerCase(),
+                          );
+                      })
+                      .map((item) => (
+                        <article
+                          className="panel library-card"
+                          key={item.product_id}
                         >
-                          Abrir material <ArrowUpRight size={16} />
-                        </button>
-                        <button
-                          className="text-link"
-                          onClick={() =>
-                            action(() =>
-                              downloadPrivate(
-                                "/api/download/" + item.product_id,
-                              ),
-                            )
-                          }
-                        >
-                          <Download size={15} /> Baixar arquivo
-                        </button>
-                      </article>
-                    ))}
+                          <span className="library-icon">
+                            <BookOpen size={28} />
+                          </span>
+                          <span className="eyebrow">
+                            ADICIONADO EM {date(item.created)}
+                          </span>
+                          <h3>{item.title}</h3>
+                          <div className="progress-label">
+                            <span>Minha revisão</span>
+                            <strong>{item.progress || 0}%</strong>
+                          </div>
+                          <div className="progress-track">
+                            <span
+                              style={{ width: (item.progress || 0) + "%" }}
+                            />
+                          </div>
+                          <button
+                            className="btn primary full"
+                            onClick={() => openReader(item)}
+                          >
+                            Abrir material <ArrowUpRight size={16} />
+                          </button>
+                          <button
+                            className="text-link"
+                            onClick={() =>
+                              action(() =>
+                                downloadPrivate(
+                                  "/api/download/" + item.product_id,
+                                ),
+                              )
+                            }
+                          >
+                            <Download size={15} /> Baixar arquivo
+                          </button>
+                        </article>
+                      ))}
                   </div>
                 ) : (
                   <Empty
@@ -1825,6 +1919,11 @@ export default function Nimbus() {
                 </div>
                 <div className="tabs">
                   {[
+                    "ideias",
+                    "cupons",
+                    "coleções",
+                    "sugestões",
+                    "correções",
                     "aprovações",
                     "indicadores",
                     "operação",
@@ -1845,6 +1944,15 @@ export default function Nimbus() {
                     </button>
                   ))}
                 </div>
+                {adminTab === "ideias" && <CommercialPlan />}
+                {adminTab === "cupons" && <CouponsAdmin />}
+                {adminTab === "coleções" && <CollectionsAdmin />}
+                {adminTab === "sugestões" && (
+                  <CommunityPanel kind="requests" manage />
+                )}
+                {adminTab === "correções" && (
+                  <CommunityPanel kind="issues" manage />
+                )}
                 {adminTab === "aprovações" && (
                   <EditorialPanel
                     products={admin.products}
@@ -2410,6 +2518,10 @@ export default function Nimbus() {
           </section>
         )}
         {![
+          "gratuitos",
+          "colecoes",
+          "interesses",
+          "correcoes",
           "inicio",
           "catalogo",
           "favoritos",
@@ -2462,6 +2574,14 @@ export default function Nimbus() {
             >
               Materiais gratuitos
             </button>
+            <button onClick={() => go("gratuitos")}>
+              Baixar PDFs gratuitos
+            </button>
+            <button onClick={() => go("colecoes")}>
+              Coleções por disciplina
+            </button>
+            <button onClick={() => go("interesses")}>Sugira um material</button>
+            <button onClick={() => go("correcoes")}>Minhas correções</button>
             <button onClick={() => go("biblioteca")}>Minha biblioteca</button>
           </div>
           <div>
@@ -2609,6 +2729,15 @@ export default function Nimbus() {
                   Ver página do autor
                 </a>
               )}
+              {detail.public_download && (
+                <a
+                  className="btn primary"
+                  href={detail.public_download}
+                  download
+                >
+                  Baixar PDF gratuito · sem cadastro
+                </a>
+              )}
               <pre>{detail.preview}</pre>
               {Array.from({ length: detail.preview_count || 0 }, (_, i) => (
                 <details
@@ -2750,6 +2879,7 @@ export default function Nimbus() {
               <Download size={17} /> Baixar meu arquivo
             </button>
             <VersionList productId={reader.product_id} />
+            <CommunityPanel kind="issues" productId={reader.product_id} />
             {reader.file_name ? (
               <div className="notice">
                 Abra o arquivo baixado no leitor do seu dispositivo. Suas

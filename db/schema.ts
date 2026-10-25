@@ -231,3 +231,61 @@ export const webhookEvents = sqliteTable("webhook_events", {
   kind: text("kind").notNull(),
   created: text("created").notNull(),
 });
+
+export const coupons = sqliteTable("coupons", {
+  code: text("code").primaryKey(),
+  kind: text("kind").notNull(),
+  value: integer("value").notNull(),
+  minTotal: integer("min_total").notNull().default(0),
+  maxUses: integer("max_uses").notNull(),
+  starts: text("starts").notNull(),
+  ends: text("ends").notNull(),
+  active: integer("active").notNull().default(1),
+  created: text("created").notNull(),
+});
+export const couponUses = sqliteTable("coupon_uses", {
+  orderId: text("order_id").primaryKey(),
+  code: text("code").notNull(),
+  userId: text("user_id").notNull(),
+  discount: integer("discount").notNull(),
+  created: text("created").notNull(),
+});
+export const collections = sqliteTable("collections", {
+  slug: text("slug").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  course: text("course").notNull(),
+  subject: text("subject").notNull(),
+  productIds: text("product_ids").notNull().default("[]"),
+  published: integer("published").notNull().default(0),
+  created: text("created").notNull(),
+});
+export const materialRequests = sqliteTable("material_requests", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  course: text("course").notNull(),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  status: text("status").notNull().default("open"),
+  response: text("response").notNull().default(""),
+  created: text("created").notNull(),
+});
+export const contentIssues = sqliteTable("content_issues", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  page: text("page").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  response: text("response").notNull().default(""),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+
+export const commercialPlan = sqliteTable("commercial_plan", {
+  id: text("id").primaryKey(),
+  status: text("status").notNull().default("evaluate"),
+  priority: text("priority").notNull().default("normal"),
+  notes: text("notes").notNull().default(""),
+  updated: text("updated").notNull(),
+});

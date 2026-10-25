@@ -57,7 +57,15 @@ export async function publicProducts(env: StoreRuntime) {
       "SELECT product_id,AVG(rating) rating,COUNT(*) review_count FROM reviews GROUP BY product_id",
     ).all<{ product_id: string; rating: number; review_count: number }>()
   ).results;
+  const ownership = (
+    await env.DB.prepare(
+      "SELECT u.id,COALESCE(a.owned,CASE WHEN instr(?,','||lower(u.email)||',')>0 THEN 1 ELSE 0 END) owned FROM users u LEFT JOIN author_accounts a ON a.id=u.id",
+    )
+      .bind("," + (env.ADMIN_EMAILS || "").toLowerCase() + ",")
+      .all<{ id: string; owned: number }>()
+  ).results;
   return source.map((p) => ({
+    owned: ownership.find((x) => x.id === p.author_id)?.owned || 0,
     ...p,
     rating: ratings.find((r) => r.product_id === p.id)?.rating || 0,
     review_count: ratings.find((r) => r.product_id === p.id)?.review_count || 0,
@@ -120,6 +128,7 @@ export async function validateBundle(
 // DTO explícito para componentes públicos: não serializar chaves de R2 ou dados comerciais.
 export function publicDTO(p: RichProduct): Product {
   return {
+    public_download: p.public_download,
     id: p.id,
     author_id: "",
     title: p.title,

@@ -1,3 +1,5 @@
+import { freeGuides } from "@/lib/free-guides";
+import { growth, couponQuote } from "@/lib/growth";
 import { extension } from "@/lib/extensions";
 import { emailIdentity } from "@/lib/identity";
 import {
@@ -51,6 +53,7 @@ function fail(message: string, status = 400): never {
   throw Object.assign(new Error(message), { status });
 }
 type Body = {
+  coupon?: string;
   reviewed?: boolean;
   feedback?: string;
   controller?: string;
@@ -209,6 +212,8 @@ async function dispatch(req: Request) {
     if (!origin || origin !== url.origin)
       fail("Origem da solicitação inválida.", 403);
   }
+  const grown = await growth(req, runtime(), auth);
+  if (grown) return grown;
   const extended = await extension(req, runtime(), auth);
   if (extended) return extended;
   if (path[0] === "privacy-info" && method === "GET") {
@@ -261,6 +266,14 @@ async function dispatch(req: Request) {
       ),
       publications: await all(
         "SELECT id,title,description,category,course,subject,topic,format,price,pages,author,preview,status,file_name,created,updated FROM products WHERE author_id=?",
+        u.id,
+      ),
+      material_requests: await all(
+        "SELECT course,subject,description,status,response,created FROM material_requests WHERE user_id=?",
+        u.id,
+      ),
+      content_issues: await all(
+        "SELECT product_id,page,message,status,response,created FROM content_issues WHERE user_id=?",
         u.id,
       ),
       notifications: await all(
@@ -515,7 +528,19 @@ async function dispatch(req: Request) {
           409,
         );
     }
-    const total = selected.reduce((s, p) => s + p.price, 0);
+    const quote = b.coupon
+      ? await couponQuote(
+          runtime(),
+          b.coupon,
+          selected.map((p) => ({ ...p, owned: policies.get(p.id)!.owned })),
+          u.id,
+        )
+      : null;
+    const priced = selected.map((p) => ({
+      ...p,
+      price: quote?.amounts.get(p.id) ?? p.price,
+    }));
+    const total = priced.reduce((s, p) => s + p.price, 0);
     if (total > 0 && !runtime().STRIPE_SECRET_KEY)
       fail(
         "Os pagamentos ainda não foram ativados. Você pode experimentar o guia gratuito.",
@@ -528,14 +553,19 @@ async function dispatch(req: Request) {
       u.id,
       "purchase_terms",
       "nimbus-terms-v2",
-      JSON.stringify({ ids, total }),
+      JSON.stringify({
+        ids,
+        total,
+        coupon: quote?.code,
+        discount: quote?.discount,
+      }),
       now(),
     );
     await DB.batch([
       DB.prepare(
         "INSERT INTO orders (id,user_id,status,total,created) VALUES(?,?,?,?,?)",
       ).bind(id, u.id, total === 0 ? "paid" : "pending", total, now()),
-      ...selected.map((p) =>
+      ...priced.map((p) =>
         DB.prepare(
           "INSERT INTO order_items (id,order_id,product_id,price,title,file_key,file_name,content,author_id,commission_bps,owned,policy_version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         ).bind(
@@ -570,7 +600,21 @@ async function dispatch(req: Request) {
           ),
         ),
       ),
-    ]);
+      ...(quote
+        ? [
+            DB.prepare(
+              "INSERT INTO coupon_uses(order_id,code,user_id,discount,created) VALUES(?,?,?,?,?)",
+            ).bind(id, quote.code, u.id, quote.discount, now()),
+          ]
+        : []),
+    ]).catch((err) => {
+      if (quote)
+        fail(
+          "Cupom indisponível, já utilizado ou com limite atingido. Atualize o carrinho.",
+          409,
+        );
+      throw err;
+    });
     if (total === 0) {
       await reconcile(runtime(), id);
       await purchaseNotice(runtime(), id, u.id);
@@ -584,7 +628,7 @@ async function dispatch(req: Request) {
       client_reference_id: id,
       customer_email: u.email,
     });
-    selected.forEach((p, i) => {
+    priced.forEach((p, i) => {
       form.set(`line_items[${i}][price_data][currency]`, "brl");
       form.set(`line_items[${i}][price_data][unit_amount]`, String(p.price));
       form.set(`line_items[${i}][price_data][product_data][name]`, p.title);
@@ -793,6 +837,8 @@ async function dispatch(req: Request) {
     const u = await auth(req);
     const item = await purchased(u.id, path[1]);
     if (!item) fail("Adquira o material para acessar o arquivo.", 403);
+    const guide = freeGuides.find((g) => g.id === path[1]);
+    if (guide) return Response.redirect(new URL(guide.url, req.url), 302);
     if (item.file_key) {
       const file = await BUCKET.get(String(item.file_key));
       if (!file) fail("Arquivo indisponível. Contate o suporte.", 404);

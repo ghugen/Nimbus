@@ -57,6 +57,20 @@
       "when": 1792952227826,
       "tag": "0007_youthful_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792959582878,
+      "tag": "0008_sloppy_marten_broadcloak",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792960207786,
+      "tag": "0009_cute_dragon_lord",
+      "breakpoints": true
     }
   ]
 }

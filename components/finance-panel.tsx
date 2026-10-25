@@ -16,14 +16,30 @@ export function FinancePanel({
   onAction?: (data: unknown) => Promise<void>;
 }) {
   const [month, setMonth] = useState(""),
+    [from, setFrom] = useState(""),
+    [to, setTo] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const entries = report.entries.filter(
-    (x) =>
-      !month ||
-      new Date(x.created)
-        .toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })
-        .startsWith(month),
+  const entries = report.entries.filter((x) => {
+    const date = new Date(x.created).toLocaleDateString("sv-SE", {
+      timeZone: "America/Sao_Paulo",
+    });
+    return (
+      (!month || date.startsWith(month)) &&
+      (!from || date >= from) &&
+      (!to || date <= to)
+    );
+  });
+  const totals = entries.reduce(
+    (s, x) => ({
+      gross: s.gross + x.gross,
+      fee: s.fee + x.fee,
+      platform:
+        s.platform + x.platform - (x.refunded_gross - x.refunded_author),
+      author: s.author + x.author_net - x.refunded_author,
+      refund: s.refund + x.refunded_gross,
+    }),
+    { gross: 0, fee: 0, platform: 0, author: 0, refund: 0 },
   );
   async function submit(data: unknown) {
     if (!onAction) return;
@@ -54,6 +70,53 @@ export function FinancePanel({
           />
         </label>
       </div>
+      <div className="metrics-dates">
+        <label>
+          De
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+        </label>
+        <label>
+          Até
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
+        </label>
+        <button
+          className="btn secondary small"
+          onClick={() => {
+            setMonth("");
+            setFrom("");
+            setTo("");
+          }}
+        >
+          Limpar filtros
+        </button>
+      </div>
+      <div className="finance-summary">
+        {[
+          ["Vendas conciliadas", totals.gross],
+          ["Processamento", totals.fee],
+          ["Reembolsos", totals.refund],
+          ["Nimbus após estornos", totals.platform],
+          ["Autores após estornos", totals.author],
+        ].map(([label, value]) => (
+          <div className="panel" key={label}>
+            <small>{label}</small>
+            <strong>{money(Number(value))}</strong>
+          </div>
+        ))}
+      </div>
+      <p className="muted">
+        Valores no período da venda; incluem ajustes conhecidos hoje. Pedidos
+        sem conciliação ficam na lista de pendências. Não inclui impostos e
+        outras despesas da operação.
+      </p>
       <p className="notice">
         Comissão padrão: 25% sobre o valor após processamento. Taxas reais são
         conciliadas com o provedor. Repasses mensais contemplam meses

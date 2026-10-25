@@ -186,3 +186,19 @@ Notificações internas cobrem aquisição, publicação/revisão, atualização
 Login independente por e-mail está integrado ao Clerk e depende de `CLERK_PUBLISHABLE_KEY` e `CLERK_SECRET_KEY`. Configure a aplicação, domínio e verificação de e-mail no provedor. A autenticação Sites continua disponível. Contas dos dois provedores têm identificadores separados e não são mescladas por e-mail.
 
 Indicadores de visualização, prévia e carrinho exigem permissão opcional no navegador; são uma amostra deduplicada por sessão/material/evento/dia, não visitantes únicos nem todo o tráfego. Compras vêm de pedidos confirmados. A escolha pode ser alterada na página de privacidade. O painel administrativo mostra pendências de pagamentos, webhook, identidade, e-mail e responsável por privacidade. Credenciais e teste real dos serviços externos ainda são necessários antes da operação comercial.
+
+## Campanhas, comunidade e coleção aberta
+
+Cupons administrativos percentuais ou fixos, em centavos, com período, mínimo do acervo próprio, limite global e um uso por conta. Os descontos são rateados sem perder centavos e persistidos nos itens da compra; a comissão usa os valores efetivamente vendidos. Autores parceiros não recebem descontos por esses cupons. Validação transacional de capacidade no banco. Pedidos pendentes reservam uso até falha/expiração confirmada. Campanhas existentes podem ser desativadas; condições novas exigem outro código.
+
+Coleções em `/colecoes/:slug`, com administração por seleção de produtos ou curso/disciplina. Três páginas iniciais de Medicina Veterinária: Patologia, Toxicologia e Doenças dos Suínos. Páginas vazias indicam preparação, sem anunciar conteúdos comerciais inexistentes.
+
+Sugestões de materiais ficam privadas ao solicitante e à administração. Correções exigem aquisição e podem ser respondidas pelo autor ou administrador. Respostas geram notificações. A biblioteca pesquisa título, disciplina, tema e anotações. O financeiro oferece filtros por período e resumo de vendas conciliadas, processamento, estornos e divisão líquida.
+
+Quatro PDFs originais gratuitos (três páginas cada), em `public/materiais-gratuitos/`, disponíveis sem cadastro na seção Baixar PDFs gratuitos. Fontes editoriais e gerador reproduzível em `scripts/content/demo-guides.json` e `scripts/generate-demo-pdfs.py`. Materiais de organização de estudos, leitura científica, fichamento e revisão ativa. Não são apostilas clínicas nem cópias de publicações de terceiros.
+
+Ainda dependem da operação: credenciais Stripe, Clerk e Resend; domínio/remetente verificado; dados confirmados do responsável por privacidade e critérios de retenção; arquivos comerciais do proprietário. Não foram criadas contas externas nem realizadas cobranças reais. Mentorias, agenda, transmissão de aulas, assinatura recorrente e emissão de certificados não estão implementadas.
+
+## Planejamento comercial administrativo
+
+Administração → ideias reúne 37 possibilidades de produtos e serviços: arquivos de estudo, visuais, prática, modelos, audiovisual, pacotes, recorrência, encontros, mentorias, serviços editoriais e licenciamento. Filtros por categoria e andamento, busca, prioridade e observações persistidas no banco. Acesso exclusivo de administrador, validado no servidor. Alterar um estado não publica ofertas nem implementa serviços futuros.

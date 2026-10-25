@@ -88,6 +88,11 @@ export function PublicMaterial({ product: p }: { product: Product }) {
                 {new Date(p.reviewed_at || "").toLocaleDateString("pt-BR")}
               </p>
             )}
+            {p.public_download && (
+              <a className="btn secondary" href={p.public_download} download>
+                Baixar PDF gratuito · sem cadastro
+              </a>
+            )}
             <strong className="detail-price">
               {p.price ? money(p.price) : "Grátis"}
             </strong>

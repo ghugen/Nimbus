@@ -119,7 +119,7 @@ try {
   const catalog = await (
     await expectStatus("catalog", { user: null }, 200)
   ).json();
-  assert.equal(catalog.products.length, 8);
+  assert.equal(catalog.products.length, 12);
   assert(!("file_key" in catalog.products[0]));
   checks++;
   await expectStatus("library", { user: null }, 401);
@@ -994,6 +994,354 @@ try {
   await expectStatus("download/" + child1, { user: "dora" }, 403);
   await expectStatus("versions?id=" + child1, { user: "dora" }, 403);
 
+  await expectStatus("coupons", {}, 403);
+  const campaign = {
+    code: "ABERTURA",
+    kind: "percent",
+    value: 50,
+    min_total: 0,
+    max_uses: 1,
+    starts: "2026-01-01T00:00:00.000Z",
+    ends: "2099-01-01T00:00:00.000Z",
+  };
+  await expectStatus("coupons", { user: "admin", body: campaign }, 200);
+  await expectStatus("coupons", { user: "admin", body: campaign }, 409);
+  await expectStatus(
+    "coupon-quote",
+    { user: "fred", body: { code: "ABERTURA", ids: [child1] } },
+    400,
+  );
+  db.prepare(
+    "INSERT INTO author_accounts(id,commission_bps,owned,updated) VALUES('charlie',0,1,?) ON CONFLICT(id) DO UPDATE SET owned=1,commission_bps=0",
+  ).run(new Date().toISOString());
+  db.prepare(
+    "UPDATE products SET accepted_owned=1,accepted_bps=0,price=101 WHERE id=?",
+  ).run(child1);
+  db.prepare(
+    "UPDATE products SET accepted_owned=1,accepted_bps=0,price=1 WHERE id=?",
+  ).run(child2);
+  const quote = await (
+    await expectStatus(
+      "coupon-quote",
+      { user: "fred", body: { code: "ABERTURA", ids: [child1, child2] } },
+      200,
+    )
+  ).json();
+  assert.equal(quote.discount, 51);
+  assert.equal(quote.total, 51);
+  checks++;
+  let captured = [];
+  globalThis.fetch = async (url, opts) => {
+    assert.equal(url, "https://api.stripe.com/v1/checkout/sessions");
+    captured = [
+      Number(opts.body.get("line_items[0][price_data][unit_amount]")),
+      Number(opts.body.get("line_items[1][price_data][unit_amount]")),
+    ];
+    return Response.json({
+      id: "cs_discounted",
+      url: "https://checkout.stripe.com/discounted",
+    });
+  };
+  const discounted = await (
+    await expectStatus(
+      "checkout",
+      {
+        user: "fred",
+        body: { ids: [child1, child2], coupon: "ABERTURA", accepted: true },
+      },
+      200,
+    )
+  ).json();
+  assert.equal(
+    captured.reduce((a, b) => a + b, 0),
+    51,
+  );
+  assert(captured.every((x) => x >= 0));
+  assert.equal(
+    db.prepare("SELECT total FROM orders WHERE id=?").get(discounted.order)
+      .total,
+    51,
+  );
+  assert.equal(
+    db
+      .prepare("SELECT SUM(price) total FROM order_items WHERE order_id=?")
+      .get(discounted.order).total,
+    51,
+  );
+  checks++;
+  await expectStatus(
+    "checkout",
+    {
+      user: "george",
+      body: { ids: [child1], coupon: "ABERTURA", accepted: true },
+    },
+    409,
+  );
+  await expectStatus(
+    "coupons",
+    { user: "admin", body: { ...campaign, code: "INATIVO", max_uses: 10 } },
+    200,
+  );
+  await expectStatus(
+    "coupons",
+    {
+      user: "admin",
+      body: { action: "toggle", code: "INATIVO", active: false },
+    },
+    200,
+  );
+  await expectStatus(
+    "coupon-quote",
+    { user: "george", body: { code: "INATIVO", ids: [child1] } },
+    400,
+  );
+  await expectStatus(
+    "coupons",
+    { user: "admin", body: { ...campaign, code: "INVALIDO", value: 101 } },
+    400,
+  );
+  // Proteção transacional: mesmo se um cliente ignorar a consulta prévia, o banco impede excesso.
+  db.prepare(
+    "INSERT INTO orders(id,user_id,status,total,created) VALUES('quota-test','george','pending',50,?)",
+  ).run(new Date().toISOString());
+  assert.throws(
+    () =>
+      db
+        .prepare(
+          "INSERT INTO coupon_uses(order_id,code,user_id,discount,created) VALUES(?,?,?,?,?)",
+        )
+        .run("quota-test", "ABERTURA", "george", 50, new Date().toISOString()),
+    /Cupom indisponível/,
+  );
+  checks++;
+  globalThis.fetch = originalFetch;
+  await expectStatus("material-requests", { user: null }, 401);
+  await expectStatus(
+    "material-requests",
+    {
+      user: "fred",
+      body: {
+        course: "Medicina Veterinária",
+        subject: "Patologia",
+        description: "Gostaria de questões comentadas sobre adaptação celular.",
+      },
+    },
+    200,
+  );
+  const suggestions = (
+    await (await call("material-requests", { user: "fred" })).json()
+  ).requests;
+  assert.equal(suggestions.length, 1);
+  assert.equal(
+    (await (await call("material-requests", { user: "george" })).json())
+      .requests.length,
+    0,
+  );
+  checks++;
+  await expectStatus(
+    "material-requests",
+    {
+      user: "george",
+      body: {
+        action: "respond",
+        id: suggestions[0].id,
+        status: "planned",
+        response: "Vou preparar o material solicitado.",
+      },
+    },
+    403,
+  );
+  await expectStatus(
+    "material-requests",
+    {
+      user: "admin",
+      body: {
+        action: "respond",
+        id: suggestions[0].id,
+        status: "planned",
+        response: "Sugestão recebida para avaliação da coleção.",
+      },
+    },
+    200,
+  );
+  await expectStatus(
+    "content-issues",
+    {
+      user: "george",
+      body: {
+        product_id: child1,
+        page: "2",
+        message: "Este trecho precisa de esclarecimento.",
+      },
+    },
+    403,
+  );
+  db.prepare("UPDATE orders SET status='paid' WHERE id=?").run(
+    discounted.order,
+  );
+  await expectStatus(
+    "content-issues",
+    {
+      user: "fred",
+      body: {
+        product_id: child1,
+        page: "2, segundo parágrafo",
+        message: "Este trecho precisa de esclarecimento e de um exemplo.",
+      },
+    },
+    200,
+  );
+  const issues = (
+    await (
+      await call("content-issues?scope=author", { user: "charlie" })
+    ).json()
+  ).issues;
+  assert.equal(issues.length, 1);
+  assert.equal(
+    (await (await call("content-issues", { user: "george" })).json()).issues
+      .length,
+    0,
+  );
+  checks++;
+  await expectStatus(
+    "content-issues",
+    {
+      user: "george",
+      body: {
+        action: "respond",
+        id: issues[0].id,
+        status: "resolved",
+        response: "Alteração não autorizada.",
+      },
+    },
+    403,
+  );
+  await expectStatus(
+    "content-issues",
+    {
+      user: "charlie",
+      body: {
+        action: "respond",
+        id: issues[0].id,
+        status: "in_progress",
+        response: "Obrigado, vou conferir este trecho na próxima revisão.",
+      },
+    },
+    200,
+  );
+  assert(
+    (
+      await (await call("notifications", { user: "fred" })).json()
+    ).notifications.some((n) => n.title === "Retorno sobre o conteúdo"),
+  );
+  checks++;
+  await expectStatus("collections", { user: null }, 200);
+  await expectStatus("collections-admin", { user: "fred" }, 403);
+  await expectStatus(
+    "collections-admin",
+    {
+      user: "admin",
+      body: {
+        slug: "colecao-teste",
+        title: "Coleção original de teste",
+        description: "Seleção editorial.",
+        course: "Medicina Veterinária",
+        subject: "Patologia",
+        product_ids: [child1],
+        published: false,
+      },
+    },
+    200,
+  );
+  assert(
+    !(
+      await (await call("collections", { user: null })).json()
+    ).collections.some((c) => c.slug === "colecao-teste"),
+  );
+  checks++;
+  await expectStatus(
+    "collections-admin",
+    {
+      user: "admin",
+      body: {
+        slug: "colecao-teste",
+        title: "Coleção original de teste",
+        product_ids: [child1],
+        published: true,
+      },
+    },
+    200,
+  );
+  const collection = (
+    await (await call("collections", { user: null })).json()
+  ).collections.find((c) => c.slug === "colecao-teste");
+  assert.equal(collection.products[0].id, child1);
+  assert(!("cover_key" in collection.products[0]));
+  assert.equal(collection.products[0].file_key, null);
+  checks++;
+  const freeCatalog = (
+    await (await call("catalog", { user: null })).json()
+  ).products.filter((p) => p.public_download);
+  assert.equal(freeCatalog.length, 4);
+  assert(freeCatalog.every((p) => p.price === 0 && p.file_format === "PDF"));
+  checks++;
+  await expectStatus(
+    "checkout",
+    { user: "fred", body: { ids: ["planejamento-academico"], accepted: true } },
+    200,
+  );
+  const pdfRedirect = await expectStatus(
+    "download/planejamento-academico",
+    { user: "fred" },
+    302,
+  );
+  assert(
+    pdfRedirect.headers
+      .get("location")
+      .endsWith("/materiais-gratuitos/planejamento-academico.pdf"),
+  );
+  checks++;
+
+  await expectStatus("commercial-plan", { user: null }, 401);
+  await expectStatus("commercial-plan", { user: "fred" }, 403);
+  const ideas = (
+    await (await expectStatus("commercial-plan", { user: "admin" }, 200)).json()
+  ).ideas;
+  assert(ideas.length >= 35);
+  assert(ideas.some((x) => x.id === "mentoria-individual"));
+  checks++;
+  await expectStatus(
+    "commercial-plan",
+    {
+      user: "admin",
+      body: {
+        id: "apostilas",
+        status: "planned",
+        priority: "high",
+        notes: "Começar por Patologia Veterinária.",
+      },
+    },
+    200,
+  );
+  const planned = (
+    await (await call("commercial-plan", { user: "admin" })).json()
+  ).ideas.find((x) => x.id === "apostilas");
+  assert.equal(planned.priority, "high");
+  assert.equal(planned.notes, "Começar por Patologia Veterinária.");
+  checks++;
+  await expectStatus(
+    "commercial-plan",
+    {
+      user: "fred",
+      body: {
+        id: "apostilas",
+        status: "available",
+        priority: "high",
+        notes: "Sem autorização",
+      },
+    },
+    403,
+  );
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );

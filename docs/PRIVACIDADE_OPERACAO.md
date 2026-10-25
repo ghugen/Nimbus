@@ -57,3 +57,9 @@ Não publicar prontuários identificados, listas de alunos, documentos, imagens 
 O inventário inclui perfis públicos autorizados, histórico editorial e versões, componentes de kits por compra, notificações internas e fila de e-mails transacionais. A exportação inclui avisos e componentes adquiridos. Clerk e Resend são integrações opcionais; validar contratos, configuração, bases aplicáveis e transferências antes de ativá-los. O acesso não mescla contas de provedores distintos.
 
 Medição de catálogo é opcional e desativada sem escolha afirmativa. O identificador da sessão permanece no sessionStorage; o servidor registra apenas hash por evento/material/dia, tipo, material e data. Relatórios agregados restritos ao autor e administrador. Definir rotina e prazo de retenção para eventos e fila de e-mails; nesta versão não existe expurgo automático. Revogar a escolha impede novos eventos, sem apagar automaticamente os anteriores.
+
+## Campanhas e participação dos estudantes
+
+O inventário também inclui uso de cupons por conta e pedido, sugestões de materiais e relatos de correção por página. Sugestões são privadas ao estudante e à administração; correções também são acessíveis ao autor do material. Relatos não devem conter dados identificáveis de pacientes ou terceiros. Respostas geram avisos transacionais. A exportação inclui os registros do solicitante. Definir e aplicar retenção desses registros em conjunto com os demais dados operacionais.
+
+PDFs de demonstração são públicos, gratuitos e originais; o acesso direto dispensa cadastro. O carrinho e a aquisição na biblioteca continuam opcionais. A audiência da hospedagem permanece conforme o compartilhamento configurado pelo proprietário.

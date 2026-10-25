@@ -1,4 +1,5 @@
 "use client";
+import { CommunityPanel } from "./growth-panels";
 import { useEffect, useState } from "react";
 import { areas, levels, languages } from "@/lib/taxonomy";
 import { formats, money, type Product } from "@/lib/catalog";
@@ -185,6 +186,7 @@ export function AuthorStudio() {
           ["perfil", "Minha página"],
           ["vendas", "Vendas e recebimentos"],
           ["indicadores", "Indicadores"],
+          ["correcoes", "Correções"],
         ].map(([key, label]) => (
           <button
             key={key}
@@ -283,6 +285,7 @@ export function AuthorStudio() {
           {tab === "perfil" && <AuthorProfile />}
           {tab === "vendas" && <FinancePanel report={data.finance} />}{" "}
           {tab === "indicadores" && <AnalyticsPanel />}
+          {tab === "correcoes" && <CommunityPanel kind="issues" author />}
           {tab === "publicar" && (
             <form
               className="panel form studio-wizard"
