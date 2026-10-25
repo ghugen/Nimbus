@@ -9,6 +9,8 @@ export const users = sqliteTable("users", {
 });
 export const products = sqliteTable("products", {
   id: text("id").primaryKey(),
+  acceptedBps: integer("accepted_bps"),
+  acceptedOwned: integer("accepted_owned"),
   authorId: text("author_id").notNull(),
   title: text("title").notNull(),
   description: text("description").notNull(),
@@ -44,6 +46,10 @@ export const orderItems = sqliteTable("order_items", {
   id: text("id").primaryKey(),
   orderId: text("order_id").notNull(),
   productId: text("product_id").notNull(),
+  authorId: text("author_id"),
+  commissionBps: integer("commission_bps"),
+  owned: integer("owned"),
+  policyVersion: text("policy_version"),
   price: integer("price").notNull(),
   title: text("title").notNull(),
   fileKey: text("file_key"),
@@ -85,5 +91,67 @@ export const audit = sqliteTable("audit", {
   userId: text("user_id").notNull(),
   action: text("action").notNull(),
   target: text("target").notNull(),
+  created: text("created").notNull(),
+});
+
+export const authorAccounts = sqliteTable("author_accounts", {
+  id: text("id").primaryKey(),
+  commissionBps: integer("commission_bps").notNull().default(2500),
+  owned: integer("owned").notNull().default(0),
+  updated: text("updated").notNull(),
+});
+export const settlements = sqliteTable("settlements", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  authorId: text("author_id").notNull(),
+  gross: integer("gross").notNull(),
+  fee: integer("fee").notNull(),
+  rate: integer("rate").notNull(),
+  platform: integer("platform").notNull(),
+  authorNet: integer("author_net").notNull(),
+  refundedGross: integer("refunded_gross").notNull().default(0),
+  refundedAuthor: integer("refunded_author").notNull().default(0),
+  releaseAt: integer("release_at").notNull(),
+  created: text("created").notNull(),
+});
+export const payouts = sqliteTable("payouts", {
+  id: text("id").primaryKey(),
+  authorId: text("author_id").notNull(),
+  amount: integer("amount").notNull(),
+  reference: text("reference").notNull().unique(),
+  actor: text("actor").notNull(),
+  created: text("created").notNull(),
+});
+export const financeEvents = sqliteTable("finance_events", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  type: text("type").notNull(),
+  detail: text("detail").notNull(),
+  created: text("created").notNull(),
+});
+
+export const privacySettings = sqliteTable("privacy_settings", {
+  id: text("id").primaryKey(),
+  controller: text("controller").notNull().default(""),
+  contact: text("contact").notNull().default(""),
+  retention: text("retention").notNull().default(""),
+  updated: text("updated").notNull(),
+});
+export const privacyRequests = sqliteTable("privacy_requests", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  kind: text("kind").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  response: text("response").notNull().default(""),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+export const legalAcceptances = sqliteTable("legal_acceptances", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  kind: text("kind").notNull(),
+  version: text("version").notNull(),
+  details: text("details").notNull(),
   created: text("created").notNull(),
 });

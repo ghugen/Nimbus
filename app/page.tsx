@@ -1,4 +1,11 @@
 "use client";
+import { PrivacyCenter } from "@/components/privacy-center";
+import { FinancePanel, EarningsPreview } from "@/components/finance-panel";
+import type {
+  FinanceReport,
+  FinanceAccount,
+  AuthorPolicy,
+} from "@/lib/finance-types";
 import {
   areas,
   levels,
@@ -97,6 +104,8 @@ type Review = {
   created: string;
 };
 type AuthorData = {
+  policy?: AuthorPolicy;
+  finance?: FinanceReport;
   products: Product[];
   sales: { product_id: string; price: number; created: string }[];
 };
@@ -131,6 +140,9 @@ type ApiResponse = {
   reviews: Review[];
   url?: string;
   id: string;
+  policy: AuthorPolicy;
+  finance: FinanceReport;
+  accounts: FinanceAccount[];
 };
 async function api(path: string, data?: unknown) {
   const r = await fetch(
@@ -162,6 +174,7 @@ const emptyForm = {
   pages: "",
   preview: "",
   rights: false,
+  commercial_accepted: false,
 };
 export default function Nimbus() {
   const [view, setView] = useState("inicio"),
@@ -202,6 +215,10 @@ export default function Nimbus() {
     [accepted, setAccepted] = useState(false),
     [mobile, setMobile] = useState(false),
     [adminTab, setAdminTab] = useState("produtos"),
+    [financeData, setFinanceData] = useState<{
+      finance: FinanceReport;
+      accounts: FinanceAccount[];
+    } | null>(null),
     [rating, setRating] = useState(5),
     [comment, setComment] = useState(""),
     [payments, setPayments] = useState(false);
@@ -368,6 +385,8 @@ export default function Nimbus() {
             (!updatedAfter ||
               (p.updated || p.created).slice(0, 10) >= updatedAfter) &&
             (showcase !== "avaliados" || topRated(p)) &&
+            (showcase !== "proprios" || (!p.demo && p.owned === 1)) &&
+            (showcase !== "parceiros" || (!p.demo && !p.owned)) &&
             (!free || p.price === 0) &&
             (view !== "favoritos" || favorites.includes(p.id)) &&
             `${p.title} ${p.subject} ${p.author} ${p.category} ${p.course} ${p.topic || ""}`
@@ -496,6 +515,11 @@ export default function Nimbus() {
         </button>
         <div className="product-body">
           <div className="product-meta">
+            {!p.demo && (
+              <span>
+                {p.owned ? "Acervo do Professor Gustavo" : "Autor parceiro"}
+              </span>
+            )}
             <span>{p.format}</span>
             {p.demo === 1 && (
               <span className="demo">
@@ -1231,6 +1255,8 @@ export default function Nimbus() {
                     >
                       {[
                         ["todos", "Todos os materiais"],
+                        ["proprios", "Acervo do Professor Gustavo"],
+                        ["parceiros", "Autores parceiros"],
                         ["gratuitos", "Gratuitos"],
                         ["novidades", "Novidades"],
                         ["avaliados", "Mais bem avaliados"],
@@ -1770,9 +1796,10 @@ export default function Nimbus() {
                 </div>
                 {signedOut("Sua próxima publicação começa aqui.")}
                 <p className="muted center">
-                  Nesta etapa, a Nimbus não realiza repasses automáticos. As
-                  condições comerciais com autores precisam ser definidas antes
-                  das vendas.
+                  Sem mensalidade ou taxa de envio. A Nimbus recebe 25% do
+                  líquido após processamento nas vendas de parceiros, salvo
+                  regra individual acordada. Repasses são controlados
+                  mensalmente e realizados fora da plataforma.
                 </p>
               </>
             ) : (
@@ -1796,9 +1823,10 @@ export default function Nimbus() {
                 </div>
                 <div className="notice">
                   Publicações passam por aprovação. O painel registra vendas
-                  brutas; comissões e repasses a autores ainda não estão
-                  habilitados.
+                  brutas. A comissão padrão é de 25% após custos de
+                  processamento, com condições específicas exibidas abaixo.
                 </div>
+                {author.finance && <FinancePanel report={author.finance} />}
                 <div className="author-layout">
                   <div>
                     <h2 className="subheading">Meus materiais</h2>
@@ -1833,6 +1861,7 @@ export default function Nimbus() {
                                 pages: String(p.pages),
                                 preview: p.preview,
                                 rights: false,
+                                commercial_accepted: false,
                               });
                               document
                                 .getElementById("author-form")
@@ -1888,6 +1917,10 @@ export default function Nimbus() {
                       action(async () => {
                         const result = await api("author", {
                           ...form,
+                          accepted_rate: author.policy?.owned
+                            ? 0
+                            : (author.policy?.commission_bps ?? 2500),
+                          accepted_owned: author.policy?.owned || 0,
                           price: Math.round(
                             Number(form.price.replace(",", ".")) * 100,
                           ),
@@ -2082,6 +2115,36 @@ export default function Nimbus() {
                         conteúdo, incluindo imagens e outros elementos.
                       </span>
                     </label>
+                    <EarningsPreview
+                      price={Math.max(
+                        0,
+                        Math.round(
+                          (Number(form.price.replace(",", ".")) || 0) * 100,
+                        ),
+                      )}
+                      policy={
+                        author.policy || { commission_bps: 2500, owned: 0 }
+                      }
+                    />
+                    <label className="check-label">
+                      <input
+                        type="checkbox"
+                        required
+                        checked={form.commercial_accepted}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            commercial_accepted: e.target.checked,
+                          })
+                        }
+                      />
+                      <span>
+                        Li e aceito a regra exibida acima, com os custos de
+                        processamento descontados antes da divisão. Serviços
+                        editoriais e descontos dependem de acordo específico. A
+                        simulação não garante o custo final.
+                      </span>
+                    </label>{" "}
                     <button className="btn primary full" disabled={busy}>
                       Salvar rascunho <Check size={16} />
                     </button>
@@ -2137,6 +2200,8 @@ export default function Nimbus() {
                     "pessoas",
                     "atendimento",
                     "histórico",
+                    "financeiro",
+                    "privacidade",
                   ].map((t) => (
                     <button
                       key={t}
@@ -2147,6 +2212,33 @@ export default function Nimbus() {
                     </button>
                   ))}
                 </div>
+                {adminTab === "privacidade" && <PrivacyCenter admin signedIn />}
+                {adminTab === "financeiro" && (
+                  <>
+                    <button
+                      className="btn secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        action(async () => {
+                          setFinanceData(await api("finance"));
+                        })
+                      }
+                    >
+                      Carregar / atualizar financeiro
+                    </button>
+                    {financeData && (
+                      <FinancePanel
+                        report={financeData.finance}
+                        accounts={financeData.accounts}
+                        onAction={async (data) => {
+                          await api("finance", data);
+                          setFinanceData(await api("finance"));
+                          notify("Financeiro atualizado.");
+                        }}
+                      />
+                    )}
+                  </>
+                )}{" "}
                 {adminTab === "produtos" && (
                   <div className="panel table-wrap">
                     <table>
@@ -2410,7 +2502,7 @@ export default function Nimbus() {
                   ],
                   [
                     "Posso vender meus próprios materiais?",
-                    "Sim. Na área Para autores, salve um rascunho e envie seu arquivo original ou autorizado. A publicação depende de aprovação. Condições de remuneração e repasse precisam ser combinadas antes da comercialização.",
+                    "Sim. Na área Para autores, salve um rascunho e envie seu arquivo original ou autorizado. A publicação depende de aprovação. A comissão padrão é de 25% após processamento, salvo regra individual confirmada pelo autor. O painel exibe o demonstrativo e o histórico de repasses externos.",
                   ],
                   [
                     "Como solicito ajuda com uma compra?",
@@ -2562,7 +2654,15 @@ export default function Nimbus() {
                   O autor declara possuir autorização para o conteúdo enviado. O
                   material passa por análise antes da publicação. O painel de
                   vendas mostra valores brutos, sem representar saldo de saque.
-                  Comissões e repasses não são automáticos nesta implementação.
+                  A comissão padrão da Nimbus é de 25% sobre o valor após
+                  processamento, salvo acordo individual. O autor confirma a
+                  regra antes de publicar; cada venda preserva suas condições. O
+                  demonstrativo utiliza as taxas reais conciliadas com o
+                  provedor. Repasses são mensais, sujeitos à disponibilidade,
+                  conciliação, estornos e reserva operacional de 14 dias, sem
+                  limitar direitos do comprador. O painel registra
+                  transferências externas já realizadas. Serviços editoriais
+                  adicionais e descontos exigem acordo específico.
                 </p>
                 <h2>Ajuda, cancelamento e reembolso</h2>
                 <p>
@@ -2587,6 +2687,7 @@ export default function Nimbus() {
                   e as condições finais precisam ser completados antes da
                   operação comercial.
                 </div>
+                <PrivacyCenter signedIn={!!user} />
                 <h2>Informações utilizadas</h2>
                 <p>
                   O acesso fornece identificador, nome e e-mail da sua conta.
@@ -2614,6 +2715,31 @@ export default function Nimbus() {
                   depois. Pedidos e materiais adquiridos ficam vinculados à
                   conta no servidor. O acesso autenticado também depende dos
                   recursos de sessão da plataforma de hospedagem.
+                </p>
+                <h2>Finalidades e recursos utilizados</h2>
+                <p>
+                  Conta, pedidos e entrega utilizam dados necessários à
+                  prestação do serviço. Informações comerciais também podem
+                  precisar ser mantidas para obrigações legais e exercício de
+                  direitos, conforme análise da operação. A leitura da política
+                  não representa consentimento genérico para qualquer uso. Não
+                  há envio de marketing nem rastreamento publicitário
+                  implementados nesta versão.
+                </p>
+                <p>
+                  O acesso é fornecido pela hospedagem Sites/ChatGPT; banco e
+                  arquivos utilizam serviços Cloudflare. Pagamentos, quando
+                  ativados, utilizam Stripe. Fontes visuais são carregadas pelo
+                  Google Fonts, o que envolve comunicação do navegador com esse
+                  fornecedor. A operação deve validar as condições contratuais e
+                  eventuais transferências internacionais desses serviços.
+                </p>
+                <p>
+                  Materiais enviados não devem conter dados pessoais de
+                  terceiros sem fundamento e autorização aplicáveis. Não envie
+                  prontuários identificados, listas de alunos, documentos
+                  pessoais ou imagens identificáveis sem análise e permissão
+                  adequadas. Curso e instituição no perfil são opcionais.
                 </p>
                 <h2>Solicitações sobre dados</h2>
                 <p>

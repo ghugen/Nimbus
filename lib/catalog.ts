@@ -4,6 +4,9 @@ export const formats = materialTypes;
 export type Product = {
   id: string;
   author_id: string;
+  owned?: number;
+  accepted_bps?: number | null;
+  accepted_owned?: number | null;
   title: string;
   description: string;
   category: string;

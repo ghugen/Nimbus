@@ -29,6 +29,27 @@
       "when": 1792949684911,
       "tag": "0003_true_gideon",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792950514759,
+      "tag": "0004_empty_colossus",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792950746726,
+      "tag": "0005_ancient_franklin_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792951067532,
+      "tag": "0006_nifty_catseye",
+      "breakpoints": true
     }
   ]
 }

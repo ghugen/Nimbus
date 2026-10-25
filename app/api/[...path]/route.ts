@@ -1,4 +1,11 @@
 import {
+  policy,
+  reconcile,
+  financialReport,
+  recordPayout,
+  POLICY_VERSION,
+} from "@/lib/finance";
+import {
   normalizeProduct,
   areas,
   levels,
@@ -31,6 +38,17 @@ function fail(message: string, status = 400): never {
   throw Object.assign(new Error(message), { status });
 }
 type Body = {
+  controller?: string;
+  contact?: string;
+  retention?: string;
+  kind?: string;
+  accepted_rate?: number;
+  accepted_owned?: number;
+  commission_bps?: number;
+  owned?: boolean;
+  commercial_accepted?: boolean;
+  amount?: number;
+  reference?: string;
   topic?: string;
   level?: string;
   language?: string;
@@ -150,7 +168,12 @@ async function catalog() {
   }>(
     "SELECT product_id,AVG(rating) rating,COUNT(*) review_count FROM reviews GROUP BY product_id",
   );
+  const ownership = await all<{ id: string; owned: number }>(
+    "SELECT u.id,COALESCE(a.owned,CASE WHEN instr(?,','||lower(u.email)||',')>0 THEN 1 ELSE 0 END) owned FROM users u LEFT JOIN author_accounts a ON a.id=u.id",
+    "," + (runtime().ADMIN_EMAILS || "").toLowerCase() + ",",
+  );
   return [...map.values()].map((p) => ({
+    owned: ownership.find((x) => x.id === p.author_id)?.owned || 0,
     ...normalizeProduct(p),
     rating: ratings.find((r) => r.product_id === p.id)?.rating || 0,
     review_count: ratings.find((r) => r.product_id === p.id)?.review_count || 0,
@@ -175,10 +198,156 @@ async function dispatch(req: Request) {
     if (!origin || origin !== url.origin)
       fail("Origem da solicitação inválida.", 403);
   }
+  if (path[0] === "privacy-info" && method === "GET") {
+    return json({
+      settings: (
+        await all(
+          "SELECT controller,contact,retention,updated FROM privacy_settings WHERE id=?",
+          "nimbus",
+        )
+      )[0] || { controller: "", contact: "", retention: "" },
+    });
+  }
+  if (path[0] === "privacy-export" && method === "GET") {
+    const u = await auth(req);
+    const profile = (await all("SELECT * FROM users WHERE id=?", u.id))[0];
+    const data = {
+      exported_at: now(),
+      profile,
+      orders: await all(
+        "SELECT id,status,total,created FROM orders WHERE user_id=?",
+        u.id,
+      ),
+      items: await all(
+        "SELECT i.product_id,i.price,i.title,o.id order_id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE o.user_id=?",
+        u.id,
+      ),
+      favorites: await all(
+        "SELECT product_id FROM favorites WHERE user_id=?",
+        u.id,
+      ),
+      notes: await all(
+        "SELECT product_id,notes,progress FROM study WHERE user_id=?",
+        u.id,
+      ),
+      reviews: await all(
+        "SELECT product_id,rating,comment,name,created FROM reviews WHERE user_id=?",
+        u.id,
+      ),
+      tickets: await all(
+        "SELECT subject,message,status,response,created FROM tickets WHERE user_id=?",
+        u.id,
+      ),
+      privacy_requests: await all(
+        "SELECT kind,message,status,response,created,updated FROM privacy_requests WHERE user_id=?",
+        u.id,
+      ),
+      acceptances: await all(
+        "SELECT kind,version,details,created FROM legal_acceptances WHERE user_id=?",
+        u.id,
+      ),
+      publications: await all(
+        "SELECT id,title,description,category,course,subject,topic,format,price,pages,author,preview,status,file_name,created,updated FROM products WHERE author_id=?",
+        u.id,
+      ),
+      finances: await financialReport(runtime(), u.id),
+    };
+    return new Response(JSON.stringify(data, null, 2), {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Disposition": "attachment; filename=nimbus-meus-dados.json",
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+  if (path[0] === "privacy") {
+    const u = await auth(req);
+    if (method === "GET")
+      return json({
+        requests: await all(
+          "SELECT * FROM privacy_requests WHERE user_id=? ORDER BY created DESC",
+          u.id,
+        ),
+      });
+    const b = await body(req);
+    if (
+      !["acesso", "correção", "exclusão", "oposição", "informações"].includes(
+        b.kind || "",
+      )
+    )
+      fail("Tipo de solicitação inválido.");
+    if (clean(b.message, 4000).length < 10) fail("Descreva sua solicitação.");
+    await run(
+      "INSERT INTO privacy_requests(id,user_id,kind,message,created,updated) VALUES(?,?,?,?,?,?)",
+      uid(),
+      u.id,
+      b.kind,
+      clean(b.message, 4000),
+      now(),
+      now(),
+    );
+    return json({ ok: true });
+  }
+  if (path[0] === "privacy-admin") {
+    const u = await admin(req);
+    if (method === "GET")
+      return json({
+        settings: (
+          await all("SELECT * FROM privacy_settings WHERE id=?", "nimbus")
+        )[0] || { controller: "", contact: "", retention: "" },
+        requests: await all(
+          "SELECT p.*,u.name,u.email FROM privacy_requests p JOIN users u ON u.id=p.user_id ORDER BY p.created DESC",
+        ),
+      });
+    const b = await body(req);
+    if (b.action === "settings") {
+      const contact = clean(b.contact, 200);
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact) ||
+        clean(b.controller, 200).length < 3 ||
+        clean(b.retention, 4000).length < 50
+      )
+        fail("Informe responsável, e-mail e critérios de retenção completos.");
+      await run(
+        "INSERT INTO privacy_settings(id,controller,contact,retention,updated) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET controller=excluded.controller,contact=excluded.contact,retention=excluded.retention,updated=excluded.updated",
+        "nimbus",
+        clean(b.controller, 200),
+        contact,
+        clean(b.retention, 4000),
+        now(),
+      );
+      await log(u.id, "privacy.settings", "nimbus");
+    } else if (b.action === "respond") {
+      if (
+        !["responded", "in_progress"].includes(b.status) ||
+        clean(b.response, 5000).length < 10
+      )
+        fail("Informe status e resposta fundamentada.");
+      await run(
+        "UPDATE privacy_requests SET status=?,response=?,updated=? WHERE id=?",
+        b.status,
+        clean(b.response, 5000),
+        now(),
+        clean(b.id, 100),
+      );
+      await log(u.id, "privacy.responded", clean(b.id, 100));
+    } else fail("Ação inválida.");
+    return json({ ok: true });
+  }
   if (path[0] === "catalog" && method === "GET") {
     const products = (await catalog())
       .filter((p) => p.status === "published")
-      .map(({ file_key, file_name, author_id, ...p }) => p);
+      .map(
+        ({
+          file_key,
+          file_name,
+          author_id,
+          accepted_bps,
+          accepted_owned,
+          ...p
+        }) => p,
+      );
     return json({ products, payments: !!runtime().STRIPE_SECRET_KEY });
   }
   if (path[0] === "me" && method === "GET") {
@@ -280,6 +449,20 @@ async function dispatch(req: Request) {
       if (p.file_key && !(await BUCKET.head(p.file_key)))
         fail("Arquivo indisponível. Entre em contato com o suporte.", 409);
     }
+    const policies = new Map<string, Awaited<ReturnType<typeof policy>>>();
+    for (const p of selected) {
+      const rule = await policy(runtime(), p.author_id);
+      policies.set(p.id, rule);
+      if (
+        !p.demo &&
+        (p.accepted_bps !== (rule.owned ? 0 : rule.commission_bps) ||
+          p.accepted_owned !== rule.owned)
+      )
+        fail(
+          "O autor precisa confirmar as condições comerciais deste material.",
+          409,
+        );
+    }
     const total = selected.reduce((s, p) => s + p.price, 0);
     if (total > 0 && !runtime().STRIPE_SECRET_KEY)
       fail(
@@ -287,13 +470,22 @@ async function dispatch(req: Request) {
         503,
       );
     const id = requestHash;
+    await run(
+      "INSERT OR IGNORE INTO legal_acceptances(id,user_id,kind,version,details,created) VALUES(?,?,?,?,?,?)",
+      id + ":purchase",
+      u.id,
+      "purchase_terms",
+      "nimbus-terms-v2",
+      JSON.stringify({ ids, total }),
+      now(),
+    );
     await DB.batch([
       DB.prepare(
         "INSERT INTO orders (id,user_id,status,total,created) VALUES(?,?,?,?,?)",
       ).bind(id, u.id, total === 0 ? "paid" : "pending", total, now()),
       ...selected.map((p) =>
         DB.prepare(
-          "INSERT INTO order_items (id,order_id,product_id,price,title,file_key,file_name,content) VALUES(?,?,?,?,?,?,?,?)",
+          "INSERT INTO order_items (id,order_id,product_id,price,title,file_key,file_name,content,author_id,commission_bps,owned,policy_version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         ).bind(
           uid(),
           id,
@@ -303,10 +495,17 @@ async function dispatch(req: Request) {
           p.file_key,
           p.file_name,
           p.preview,
+          p.author_id,
+          policies.get(p.id)!.owned ? 0 : policies.get(p.id)!.commission_bps,
+          policies.get(p.id)!.owned,
+          POLICY_VERSION,
         ),
       ),
     ]);
-    if (total === 0) return json({ ok: true, order: id, free: true });
+    if (total === 0) {
+      await reconcile(runtime(), id);
+      return json({ ok: true, order: id, free: true });
+    }
     const form = new URLSearchParams({
       mode: "payment",
       success_url: `${url.origin}/?payment=success&order=${id}#biblioteca`,
@@ -367,6 +566,36 @@ async function dispatch(req: Request) {
         s?.id || "",
       )
     )[0];
+    const affected =
+      order?.id ||
+      (s?.payment_intent
+        ? (
+            await all<{ id: string }>(
+              "SELECT id FROM orders WHERE payment_intent=?",
+              typeof s.payment_intent === "string"
+                ? s.payment_intent
+                : s.payment_intent.id,
+            )
+          )[0]?.id
+        : null);
+    if (
+      affected &&
+      [
+        "checkout.session.completed",
+        "checkout.session.async_payment_succeeded",
+        "charge.refunded",
+        "charge.dispute.created",
+      ].includes(event.type)
+    ) {
+      await run(
+        "INSERT OR REPLACE INTO finance_events(id,order_id,type,detail,created) VALUES(?,?,?,?,?)",
+        affected + ":hold",
+        affected,
+        "hold",
+        "Aguardando conciliação do provedor",
+        now(),
+      );
+    }
     if (
       event.type === "charge.refunded" &&
       s.refunded === true &&
@@ -408,6 +637,20 @@ async function dispatch(req: Request) {
         order.id,
         "pending",
       );
+    if (
+      affected &&
+      [
+        "checkout.session.completed",
+        "checkout.session.async_payment_succeeded",
+        "charge.refunded",
+      ].includes(event.type)
+    ) {
+      try {
+        await reconcile(runtime(), affected);
+      } catch (e) {
+        console.warn("Finance pending", affected, (e as Error).message);
+      }
+    }
     return json({ received: true });
   }
   if (path[0] === "library" && method === "GET") {
@@ -553,11 +796,27 @@ async function dispatch(req: Request) {
         "SELECT i.product_id,i.price,o.created FROM order_items i JOIN orders o ON o.id=i.order_id JOIN products p ON p.id=i.product_id WHERE p.author_id=? AND o.status='paid'",
         u.id,
       );
-      return json({ products, sales });
+      return json({
+        products,
+        sales,
+        policy: await policy(runtime(), u.id),
+        finance: await financialReport(runtime(), u.id),
+      });
     }
     if (method === "POST") {
       const b = await body(req);
       validProduct({ ...b });
+      const terms = await policy(runtime(), u.id);
+      if (
+        b.accepted_rate !== (terms.owned ? 0 : terms.commission_bps) ||
+        b.accepted_owned !== terms.owned
+      )
+        fail(
+          "As condições comerciais mudaram. Atualize a página e confirme a nova regra.",
+          409,
+        );
+      if (b.commercial_accepted !== true)
+        fail("Confirme as condições comerciais antes de salvar.");
       if (b.rights !== true)
         fail("Confirme a autoria ou autorização de publicação.");
       const legacyCourse = Object.values(areas).flat().includes(b.category)
@@ -586,8 +845,7 @@ async function dispatch(req: Request) {
         fail("Curso, nível ou idioma inválido.");
       const id = clean(b.id, 100) || uid();
       const existing = (await catalog()).find((p) => p.id === id);
-      if (existing && existing.author_id !== u.id && !u.admin)
-        fail("Acesso negado.", 403);
+      if (existing && existing.author_id !== u.id) fail("Acesso negado.", 403);
       if (
         clean(b.description, 5000).length < 30 ||
         clean(b.preview, 20000).length < 50
@@ -633,6 +891,25 @@ async function dispatch(req: Request) {
         now(),
         clean(b.topic, 120),
         id,
+      );
+      await run(
+        "UPDATE products SET accepted_bps=?,accepted_owned=? WHERE id=?",
+        terms.owned ? 0 : terms.commission_bps,
+        terms.owned,
+        id,
+      );
+      await run(
+        "INSERT INTO legal_acceptances(id,user_id,kind,version,details,created) VALUES(?,?,?,?,?,?)",
+        uid(),
+        u.id,
+        "author_terms",
+        POLICY_VERSION,
+        JSON.stringify({
+          product: id,
+          rate: terms.owned ? 0 : terms.commission_bps,
+          owned: terms.owned,
+        }),
+        now(),
       );
       await log(u.id, "product.saved", id);
       return json({ ok: true, id });
@@ -689,6 +966,67 @@ async function dispatch(req: Request) {
       },
     });
   }
+  if (path[0] === "finance") {
+    const u = await admin(req);
+    if (method === "GET") {
+      const accounts = await all<{ id: string; email: string; name: string }>(
+        "SELECT id,email,name FROM users",
+      );
+      return json({
+        finance: await financialReport(runtime()),
+        accounts: await Promise.all(
+          accounts.map(async (a) => ({
+            ...a,
+            ...(await policy(runtime(), a.id)),
+          })),
+        ),
+      });
+    }
+    const b = await body(req);
+    if (b.action === "policy") {
+      if (
+        !Number.isInteger(b.commission_bps) ||
+        b.commission_bps! < 0 ||
+        b.commission_bps! > 10000 ||
+        typeof b.owned !== "boolean"
+      )
+        fail("Comissão inválida.");
+      if (!(await all("SELECT id FROM users WHERE id=?", b.id)).length)
+        fail("Autor não encontrado.", 404);
+      const old = await policy(runtime(), b.id);
+      await DB.batch([
+        DB.prepare(
+          "INSERT INTO author_accounts(id,commission_bps,owned,updated) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET commission_bps=excluded.commission_bps,owned=excluded.owned,updated=excluded.updated",
+        ).bind(b.id, b.commission_bps, b.owned ? 1 : 0, now()),
+        DB.prepare(
+          "UPDATE products SET status='draft' WHERE author_id=? AND (accepted_bps IS NULL OR accepted_bps!=? OR accepted_owned IS NULL OR accepted_owned!=?)",
+        ).bind(b.id, b.owned ? 0 : b.commission_bps, b.owned ? 1 : 0),
+      ]);
+      await log(
+        u.id,
+        "author.policy",
+        JSON.stringify({
+          id: b.id,
+          old,
+          rate: b.commission_bps,
+          owned: b.owned,
+        }),
+      );
+    } else if (b.action === "reconcile") {
+      await reconcile(runtime(), b.id);
+      await log(u.id, "finance.reconciled", b.id);
+    } else if (b.action === "payout") {
+      const id = await recordPayout(
+        runtime(),
+        b.id,
+        b.amount!,
+        clean(b.reference, 180),
+        u.id,
+      );
+      await log(u.id, "payout.recorded", id);
+    } else fail("Ação inválida.");
+    return json({ ok: true });
+  }
   if (path[0] === "admin") {
     const u = await admin(req);
     if (method === "GET") {
@@ -712,6 +1050,14 @@ async function dispatch(req: Request) {
         if (!["published", "rejected", "draft"].includes(b.status))
           fail("Status inválido.");
         const p = (await catalog()).find((p) => p.id === b.id);
+        if (p && b.status === "published") {
+          const terms = await policy(runtime(), p.author_id);
+          if (
+            p.accepted_bps !== (terms.owned ? 0 : terms.commission_bps) ||
+            p.accepted_owned !== terms.owned
+          )
+            fail("O autor deve aceitar as condições comerciais atuais.", 409);
+        }
         if (!p || p.demo || !p.file_key)
           fail("Apenas materiais reais com arquivo podem ser publicados.");
         await run("UPDATE products SET status=? WHERE id=?", b.status, p.id);
@@ -741,6 +1087,19 @@ async function handler(req: Request) {
     if (e instanceof SyntaxError)
       return json({ error: "Dados inválidos." }, 400);
     if (
+      [
+        "Referência de repasse",
+        "Valores financeiros",
+        "Rateio",
+        "Dados de repasse",
+        "Saldo não liberado",
+        "Pedido sem pagamento",
+        "Pedido anterior",
+        "Aguardando dados",
+        "Pagamento sem taxa",
+        "Taxa alterada",
+        "Não foi possível consultar",
+      ].some((x) => error.message.startsWith(x)) ||
       error.message.startsWith("Carrinho") ||
       error.message.includes("inválido") ||
       error.message.startsWith("Título") ||

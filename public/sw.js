@@ -1,4 +1,4 @@
-const CACHE = "nimbus-static-v1";
+const CACHE = "nimbus-static-v2";
 self.addEventListener("install", (event) =>
   event.waitUntil(
     caches

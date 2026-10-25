@@ -32,7 +32,7 @@ A aplicação possui frontend e backend conectados a banco D1 e arquivos privado
 
 ## O que não está automatizado
 
-- Repasse a autores, comissão, saques, Stripe Connect e emissão fiscal.
+- Transferências bancárias automáticas, saques, Stripe Connect e emissão fiscal. O financeiro agora calcula comissões e registra repasses externos.
 - Reembolsos pelo painel Nimbus (devem ser tratados pela operação no provedor).
 - E-mail transacional, recuperação por e-mail, login social fora da autenticação da hospedagem.
 - Proteção DRM: nenhum sistema impede totalmente a redistribuição após um download autorizado.
@@ -147,3 +147,26 @@ Em instalações locais existentes, após reconstruir a aplicação, aplique tam
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_useful_rafael_vega.sql
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0003_true_gideon.sql
 ```
+
+## Marketplace híbrido e financeiro
+
+- Materiais do proprietário da Nimbus pertencem ao acervo próprio; o líquido integral pertence à operação. Parceiros usam comissão padrão de **25% sobre o líquido após processamento**, com regra individual editável pela administração.
+- Autores visualizam um simulador e precisam confirmar a regra vigente ao salvar. Uma mudança de regra retira materiais incompatíveis de publicação até nova confirmação. Publicações antigas também precisam da confirmação antes de novas compras.
+- Pedidos registram autor, percentual, origem e versão da regra por item. Não há recálculo retroativo quando a comissão muda. Pedidos legados sem snapshot comercial ficam pendentes, sem atribuição inventada.
+- A conciliação consulta `PaymentIntent.latest_charge.balance_transaction` na Stripe. Só aceita taxa real e valores/moeda compatíveis. Rateio proporcional com distribuição do resto em centavos evita perdas por arredondamento em pedidos com vários autores.
+- Taxa não disponível, divergência ou disputa impedem a liberação. Administração pode tentar novamente em **Financeiro**. Não há taxas simuladas utilizadas em saldos reais.
+- Repasses são mensais: entram meses anteriores no fuso de São Paulo, depois da disponibilidade informada pelo provedor e de uma reserva operacional de 14 dias. Essa reserva não é prazo de garantia nem limita direitos do consumidor.
+- O painel **registra transferências já realizadas fora da Nimbus**. Não executa PIX ou outra movimentação bancária. Verificação atômica de saldo e referência única previnem registros duplicados ou acima do disponível.
+- Estornos são cumulativos, sem duplicação por reenvio do webhook. Reduzem a parcela do autor proporcionalmente; taxas não devolvidas ficam com a operação Nimbus. Se o repasse já foi feito, eventual saldo negativo é carregado para os próximos períodos.
+- Ative também o webhook `charge.dispute.created`. Disputas e alterações posteriores de tarifas exigem revisão operacional. Impostos, custos extraordinários de estorno/disputa e revisão editorial não são apurados automaticamente.
+- Comissões não implicam cessão de direitos autorais. Não há mensalidade de cadastro/envio; serviços editoriais e descontos dependem de acordo específico com o autor.
+
+## Identidade visual
+
+Neobrutalismo moderado com inspiração editorial: marfim `#FAF7F0`, preto tinta `#24212B`, lilás `#B9A3F5`, roxo `#5941A9`, amarelo `#F4D76E`, sálvia `#BFD5BC` e coral `#EFA394`. Vitrine com bordas e sombras definidas; leitura e tabelas com menos decoração. A página de privacidade continua identificada como em implantação e não representa declaração de adequação integral à LGPD.
+
+## Central de privacidade
+
+A página de privacidade permite exportação JSON autenticada e solicitações de acesso, correção, exclusão, oposição e informações, com protocolo e acompanhamento. A administração possui aba **Privacidade** para configurar responsável, e-mail público e retenção, além de responder solicitações. Os aceites de compra e condições do autor ficam registrados separadamente; não são tratados como consentimento genérico de LGPD.
+
+A central não envia e-mails, não executa exclusão automática nem configura backups. Os campos da operação precisam ser preenchidos, os prazos de atendimento acompanhados e as bases legais, os fornecedores e a retenção revisados antes das vendas. Consulte `docs/PRIVACIDADE_OPERACAO.md`. A presença desses controles não certifica adequação integral à LGPD.

@@ -1,0 +1,1 @@
+ALTER TABLE `products` ADD `accepted_owned` integer;

@@ -250,6 +250,9 @@ try {
     preview:
       "Prévia de teste com conteúdo original e informações suficientes para conhecer o material.",
     rights: true,
+    commercial_accepted: true,
+    accepted_rate: 2500,
+    accepted_owned: 0,
   };
   await expectStatus(
     "author",
@@ -363,8 +366,52 @@ try {
       200,
     )
   ).json();
-  globalThis.fetch = originalFetch;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("/payment_intents/"))
+      return Response.json({
+        status: "succeeded",
+        latest_charge: {
+          id: "ch_test",
+          amount: 1990,
+          amount_refunded: 0,
+          currency: "brl",
+          balance_transaction: {
+            id: "txn_test",
+            fee: 190,
+            amount: 1990,
+            currency: "brl",
+            available_on: Math.floor(Date.now() / 1000) - 1,
+          },
+        },
+      });
+    throw new Error("Unexpected external request");
+  };
   await expectStatus("download/" + saved.id, {}, 403);
+  await expectStatus(
+    "finance",
+    {
+      body: {
+        action: "policy",
+        id: "alice",
+        commission_bps: 3000,
+        owned: false,
+      },
+    },
+    403,
+  );
+  await expectStatus(
+    "finance",
+    {
+      user: "admin",
+      body: {
+        action: "policy",
+        id: "alice",
+        commission_bps: 3000,
+        owned: false,
+      },
+    },
+    200,
+  );
   async function webhook(amount = 1990, valid = true) {
     const event = {
       id: "evt_test",
@@ -403,10 +450,93 @@ try {
   await webhook();
   await webhook();
   await expectStatus("download/" + saved.id, {}, 200);
+  const authorFinance = (await (await call("author")).json()).finance;
+  const sale = authorFinance.entries.find((x) => x.order_id === checkout.order);
+  assert.equal(sale.rate, 2500);
+  assert.equal(sale.fee, 190);
+  assert.equal(sale.author_net, 1350);
+  assert.equal(sale.platform, 450);
+  assert.equal(
+    authorFinance.entries.filter((x) => x.order_id === checkout.order).length,
+    1,
+  );
+  checks++;
+  await expectStatus(
+    "finance",
+    {
+      user: "admin",
+      body: {
+        action: "payout",
+        id: "alice",
+        amount: 1350,
+        reference: "TEST-RESERVE",
+      },
+    },
+    400,
+  );
+  db.prepare(
+    "UPDATE settlements SET release_at=0,created='2025-01-01T00:00:00.000Z' WHERE order_id=?",
+  ).run(checkout.order);
+  await expectStatus(
+    "finance",
+    {
+      user: "admin",
+      body: {
+        action: "payout",
+        id: "alice",
+        amount: 1350,
+        reference: "TEST-TRANSFER-1",
+      },
+    },
+    200,
+  );
+  await expectStatus(
+    "finance",
+    {
+      user: "admin",
+      body: {
+        action: "payout",
+        id: "alice",
+        amount: 1,
+        reference: "TEST-TRANSFER-1",
+      },
+    },
+    400,
+  );
+  await expectStatus(
+    "finance",
+    {
+      user: "admin",
+      body: {
+        action: "payout",
+        id: "alice",
+        amount: 1,
+        reference: "TEST-OVERDRAW",
+      },
+    },
+    400,
+  );
   const orders = await (await call("orders")).json();
   assert.equal(orders.orders.find((o) => o.id === checkout.order).total, 1990);
   checks++;
   await expectStatus("download/" + saved.id, { user: "bob" }, 403);
+  globalThis.fetch = async () =>
+    Response.json({
+      status: "succeeded",
+      latest_charge: {
+        id: "ch_test",
+        amount: 1990,
+        amount_refunded: 1990,
+        currency: "brl",
+        balance_transaction: {
+          id: "txn_test",
+          fee: 190,
+          amount: 1990,
+          currency: "brl",
+          available_on: Math.floor(Date.now() / 1000) - 1,
+        },
+      },
+    });
   const refundBody = JSON.stringify({
     id: "evt_refund",
     type: "charge.refunded",
@@ -427,6 +557,69 @@ try {
     200,
   );
   await expectStatus("download/" + saved.id, {}, 403);
+  const finalReport = (await (await call("author")).json()).finance;
+  const remaining = finalReport.balances.find((x) => x.author_id === "alice");
+  assert.equal(remaining.balance, -1350);
+  assert.equal(remaining.payable, 0);
+  checks++;
+  await expectStatus("privacy-export", { user: null }, 401);
+  await expectStatus("privacy-admin", {}, 403);
+  await expectStatus(
+    "privacy",
+    {
+      body: {
+        kind: "exclusão",
+        message: "Solicito análise de exclusão dos meus dados.",
+      },
+    },
+    200,
+  );
+  const privacy = (await (await call("privacy")).json()).requests;
+  assert.equal(privacy.length, 1);
+  const bobPrivacy = (await (await call("privacy", { user: "bob" })).json())
+    .requests;
+  assert.equal(bobPrivacy.length, 0);
+  checks++;
+  await expectStatus(
+    "privacy-admin",
+    {
+      user: "admin",
+      body: {
+        action: "respond",
+        id: privacy[0].id,
+        status: "in_progress",
+        response: "Pedido recebido, em análise das retenções aplicáveis.",
+      },
+    },
+    200,
+  );
+  const exported = await (await expectStatus("privacy-export", {}, 200)).json();
+  assert.equal(exported.profile.id, "alice");
+  assert.equal(exported.privacy_requests[0].status, "in_progress");
+  assert(!JSON.stringify(exported).includes("sk_test_fake"));
+  assert(!Object.keys(exported).includes("credentials"));
+  checks++;
+  await expectStatus(
+    "privacy-admin",
+    {
+      user: "admin",
+      body: {
+        action: "settings",
+        controller: "Operação de teste Nimbus",
+        contact: "privacidade@nimbus.test",
+        retention:
+          "Critérios demonstrativos de teste: conservar dados estritamente necessários e analisar obrigações legais antes da exclusão.",
+      },
+    },
+    200,
+  );
+  assert.equal(
+    (await (await call("privacy-info", { user: null })).json()).settings
+      .contact,
+    "privacidade@nimbus.test",
+  );
+  checks++;
+  globalThis.fetch = originalFetch;
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );

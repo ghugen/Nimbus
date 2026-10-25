@@ -74,3 +74,31 @@ test("vitrine de avaliações exige dados reais e amostra suficiente", () => {
   assert.equal(topRated({ demo: 0, rating: 3.9, review_count: 10 }), false);
   assert.equal(topRated({ demo: 0, rating: 4, review_count: 3 }), true);
 });
+
+import { splitNet, allocate } from "../lib/finance.ts";
+test("comissão após processamento e acervo próprio preservam centavos", () => {
+  assert.deepEqual(splitNet(3000, 200, 2500), {
+    gross: 3000,
+    fee: 200,
+    platform: 700,
+    author_net: 2100,
+  });
+  assert.equal(splitNet(3000, 200, 2500, true).platform, 2800);
+  assert.equal(splitNet(3000, 200, 2500, true).author_net, 0);
+  for (const rate of [0, 1500, 2500, 10000]) {
+    const s = splitNet(1999, 163, rate);
+    assert.equal(s.fee + s.author_net + s.platform, 1999);
+  }
+  assert.throws(() => splitNet(100, 101, 2500));
+  assert.throws(() => splitNet(100, 0, 2500.5));
+});
+test("rateio distribui todos os centavos e nunca cria taxas em itens gratuitos", () => {
+  assert.deepEqual(allocate(10, [1, 1, 1]), [4, 3, 3]);
+  assert.deepEqual(allocate(10, [0, 30, 70]), [0, 3, 7]);
+  for (let total = 0; total < 50; total++)
+    assert.equal(
+      allocate(total, [100, 2490, 310]).reduce((s, x) => s + x, 0),
+      total,
+    );
+  assert.throws(() => allocate(1, [0, 0]));
+});
