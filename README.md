@@ -202,3 +202,13 @@ Ainda dependem da operação: credenciais Stripe, Clerk e Resend; domínio/remet
 ## Planejamento comercial administrativo
 
 Administração → ideias reúne 37 possibilidades de produtos e serviços: arquivos de estudo, visuais, prática, modelos, audiovisual, pacotes, recorrência, encontros, mentorias, serviços editoriais e licenciamento. Filtros por categoria e andamento, busca, prioridade e observações persistidas no banco. Acesso exclusivo de administrador, validado no servidor. Alterar um estado não publica ofertas nem implementa serviços futuros.
+
+## Áreas e navegação
+
+A navegação separa Loja, Minha biblioteca, Espaço do autor e Administração. Na entrada sem destino explícito, administradores abrem o resumo administrativo e demais contas abrem a biblioteca. A loja continua acessível a qualquer momento. Entradas com destino válido (por exemplo, carrinho) preservam a intenção após autenticação; destinos externos são rejeitados.
+
+A biblioteca destaca um material em andamento com “Continuar estudando”. O espaço do autor tem resumo de publicações e recebimentos. A administração abre um resumo de vendas confirmadas, líquido conciliado, repasses liberados e pendências; atalhos levam à publicação, coleções, cupons e loja. As seções administrativas são agrupadas em Catálogo, Vendas, Relacionamento e Gestão, com menu recolhível no celular.
+
+Links diretos preservados: `/#admin/ideias`, `/#admin/financeiro`, `/#admin/aprovações` e `/#autores/publicar`. A permissão é verificada no servidor, inclusive no endpoint do resumo; ocultar menus não concede nem revoga acesso. Todos os usuários podem acessar o fluxo de submissão de autoria, sujeito à revisão editorial e às condições comerciais.
+
+Validação: testes de navegação, destinos seguros, agregações do resumo e bloqueio de acesso; conferência visual dos componentes em 390 e 414 px usando dados fictícios, sem conceder acesso a dados reais. A captura em `docs/nimbus-workspaces-mobile.jpg` registra essa conferência. Teste autenticado completo em dispositivo físico permanece uma validação operacional complementar.

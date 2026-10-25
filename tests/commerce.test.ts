@@ -102,3 +102,32 @@ test("rateio distribui todos os centavos e nunca cria taxas em itens gratuitos",
     );
   assert.throws(() => allocate(1, [0, 0]));
 });
+
+test("navegação separa áreas e preserva links de seções com acentos", async () => {
+  const { workspaceFor, homeFor, parseNavigation, safeReturnTarget } =
+    await import("../lib/navigation.ts");
+  assert.equal(homeFor(null), "inicio");
+  assert.equal(homeFor({ admin: false }), "biblioteca");
+  assert.equal(homeFor({ admin: true }), "admin");
+  assert.equal(workspaceFor("catalogo"), "loja");
+  assert.equal(workspaceFor("biblioteca"), "estudante");
+  assert.equal(workspaceFor("autores"), "autor");
+  assert.equal(workspaceFor("admin"), "admin");
+  assert.deepEqual(parseNavigation("#admin/aprova%C3%A7%C3%B5es"), {
+    view: "admin",
+    adminTab: "aprovações",
+    authorTab: "resumo",
+  });
+  assert.equal(parseNavigation("#autores/publicar").authorTab, "publicar");
+  assert.equal(parseNavigation("#admin/desconhecido").adminTab, "resumo");
+  assert.equal(safeReturnTarget("carrinho"), "carrinho");
+  assert.equal(safeReturnTarget("autores/publicar"), "autores/publicar");
+  for (const path of [
+    "https://example.com",
+    "//example.com",
+    "admin/ideias/extra",
+    "javascript:alert(1)",
+    null,
+  ])
+    assert.equal(safeReturnTarget(path), "conta");
+});

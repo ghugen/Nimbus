@@ -1,4 +1,5 @@
 "use client";
+import { AuthorOverview } from "./workspace-overviews";
 import { CommunityPanel } from "./growth-panels";
 import { useEffect, useState } from "react";
 import { areas, levels, languages } from "@/lib/taxonomy";
@@ -41,9 +42,15 @@ const blank = {
   rights: false,
   commercial_accepted: false,
 };
-export function AuthorStudio() {
+export function AuthorStudio({
+  initialTab = "resumo",
+  onTabChange,
+}: {
+  initialTab?: string;
+  onTabChange?: (tab: string) => void;
+}) {
   const [data, setData] = useState<Data | null>(null),
-    [tab, setTab] = useState("materiais"),
+    [tab, setTabState] = useState(initialTab),
     [step, setStep] = useState(0),
     [form, setForm] = useState(blank),
     [file, setFile] = useState<File | null>(null),
@@ -52,6 +59,13 @@ export function AuthorStudio() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
+  function setTab(next: string) {
+    setTabState(next);
+    onTabChange?.(next);
+  }
+  useEffect(() => {
+    setTabState(initialTab);
+  }, [initialTab]);
   async function load() {
     setData((await callApi("author")) as unknown as Data);
   }
@@ -181,6 +195,7 @@ export function AuthorStudio() {
     <div className="author-studio">
       <div className="tabs">
         {[
+          ["resumo", "Resumo"],
           ["materiais", "Meus materiais"],
           ["publicar", "Publicar"],
           ["perfil", "Minha página"],
@@ -211,6 +226,15 @@ export function AuthorStudio() {
         <p>Carregando sua área…</p>
       ) : (
         <>
+          {tab === "resumo" && (
+            <AuthorOverview
+              products={data.products}
+              finance={data.finance}
+              onNavigate={(next) =>
+                next === "publicar" ? edit() : setTab(next)
+              }
+            />
+          )}
           {tab === "materiais" && (
             <>
               <button className="btn primary" onClick={() => edit()}>

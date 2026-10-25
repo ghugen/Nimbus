@@ -1,4 +1,10 @@
 "use client";
+import {
+  WorkspaceNavigation,
+  AdminNavigation,
+} from "@/components/workspace-navigation";
+import { AdminOverview, LearnerStart } from "@/components/workspace-overviews";
+import { parseNavigation, homeFor, workspaceFor } from "@/lib/navigation";
 import { CommercialPlan } from "@/components/commercial-plan";
 import { FreeDownloads } from "@/components/free-downloads";
 import {
@@ -197,6 +203,7 @@ const emptyForm = {
   commercial_accepted: false,
 };
 export default function Nimbus() {
+  const [authorTab, setAuthorTab] = useState("resumo");
   const [libraryQuery, setLibraryQuery] = useState("");
   const [coupon, setCoupon] = useState<{
     code: string;
@@ -240,7 +247,7 @@ export default function Nimbus() {
     [progress, setProgress] = useState(0),
     [accepted, setAccepted] = useState(false),
     [mobile, setMobile] = useState(false),
-    [adminTab, setAdminTab] = useState("produtos"),
+    [adminTab, setAdminTab] = useState("resumo"),
     [financeData, setFinanceData] = useState<{
       finance: FinanceReport;
       accounts: FinanceAccount[];
@@ -250,7 +257,10 @@ export default function Nimbus() {
     [payments, setPayments] = useState(false);
   function go(next: string) {
     window.location.hash = next;
-    setView(next);
+    const route = parseNavigation(next);
+    setView(route.view);
+    setAdminTab(route.adminTab);
+    setAuthorTab(route.authorTab);
     setMobile(false);
     setError("");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -278,6 +288,8 @@ export default function Nimbus() {
   async function refresh() {
     const [, d] = await Promise.all([loadCatalog(), api("me")]);
     setUser(d.user);
+    if (d.user && (!window.location.hash || window.location.hash === "#conta"))
+      go(homeFor(d.user));
     setFavorites(d.favorites || []);
   }
   useEffect(() => {
@@ -291,7 +303,10 @@ export default function Nimbus() {
   }, []);
   useEffect(() => {
     const change = () => {
-      setView(window.location.hash.slice(1) || "inicio");
+      const route = parseNavigation(window.location.hash);
+      setView(route.view);
+      setAdminTab(route.adminTab);
+      setAuthorTab(route.authorTab);
       setMobile(false);
     };
     change();
@@ -332,7 +347,7 @@ export default function Nimbus() {
       if (view === "autores") setAuthor(await api("author"));
       if (view === "admin" && user.admin) setAdmin(await api("admin"));
     });
-  }, [view, user?.id]);
+  }, [view, user?.id, adminTab]);
   useEffect(() => {
     if (!detail) return;
     metric(detail.id, "view");
@@ -508,7 +523,11 @@ export default function Nimbus() {
         Entre com sua conta para encontrar seus materiais, acompanhar pedidos e
         continuar estudando.
       </p>
-      <a className="btn primary" href={"/entrar"} target="_top">
+      <a
+        className="btn primary"
+        href={"/entrar?destino=" + encodeURIComponent(view)}
+        target="_top"
+      >
         Entrar na Nimbus <ArrowUpRight size={17} />
       </a>
       <small>
@@ -618,32 +637,28 @@ export default function Nimbus() {
           </a>
           <nav
             className={mobile ? "mobile-open" : ""}
-            aria-label="Navegação principal"
+            aria-label="Navegação da loja"
           >
-            <button
-              className={view === "colecoes" ? "selected" : ""}
-              onClick={() => go("colecoes")}
-            >
-              Coleções
-            </button>
-            <button
-              className={view === "inicio" ? "selected" : ""}
-              onClick={() => go("inicio")}
-            >
-              Início
-            </button>
-            <button
-              className={view === "catalogo" ? "selected" : ""}
-              onClick={() => go("catalogo")}
-            >
-              Explorar materiais
-            </button>
-            <button
-              className={view === "autores" ? "selected" : ""}
-              onClick={() => go("autores")}
-            >
-              Para autores <ArrowUpRight size={12} />
-            </button>
+            {[
+              ["inicio", "Loja"],
+              ["catalogo", "Explorar materiais"],
+              ["colecoes", "Coleções"],
+              ["gratuitos", "Gratuitos"],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                className={view === id ? "selected" : ""}
+                aria-current={view === id ? "page" : undefined}
+                onClick={() => go(id)}
+              >
+                {label}
+              </button>
+            ))}
+            {!user && (
+              <button onClick={() => go("autores")}>
+                Para autores <ArrowUpRight size={12} />
+              </button>
+            )}
           </nav>
           <div className="header-actions">
             <button
@@ -662,9 +677,9 @@ export default function Nimbus() {
               {cart.length > 0 && <span>{cart.length}</span>}
             </button>
             {user ? (
-              <button className="account" onClick={() => go("biblioteca")}>
+              <button className="account" onClick={() => go(homeFor(user))}>
                 <span className="avatar">{initials(user.name)}</span>
-                <span>Minha biblioteca</span>
+                <span>{user.admin ? "Meu painel" : "Minha biblioteca"}</span>
               </button>
             ) : (
               <a className="btn primary small" href="/entrar" target="_top">
@@ -682,7 +697,10 @@ export default function Nimbus() {
           </div>
         </div>
       </header>
-      {user && view !== "inicio" && (
+      {user && (
+        <WorkspaceNavigation view={view} admin={user.admin} onNavigate={go} />
+      )}
+      {user && workspaceFor(view) === "estudante" && (
         <div className="account-nav">
           <div className="container">
             <button
@@ -721,18 +739,31 @@ export default function Nimbus() {
             >
               <Mail size={15} /> Notificações
             </button>
-            {user.admin && (
-              <button
-                onClick={() => go("admin")}
-                className={view === "admin" ? "active" : ""}
-              >
-                <Settings size={15} /> Administração
-              </button>
-            )}
+            <button
+              onClick={() => go("interesses")}
+              className={view === "interesses" ? "active" : ""}
+            >
+              Sugestões
+            </button>
+            <button
+              onClick={() => go("correcoes")}
+              className={view === "correcoes" ? "active" : ""}
+            >
+              Minhas correções
+            </button>
           </div>
         </div>
       )}
       <main>
+        {view === "conta" && !user && (
+          <section className="container page-section">
+            {loaded ? (
+              signedOut("Entre para abrir sua área")
+            ) : (
+              <p role="status">Preparando sua área…</p>
+            )}
+          </section>
+        )}
         {error && (
           <div className="container">
             <div className="error" role="alert">
@@ -1545,7 +1576,7 @@ export default function Nimbus() {
                   ) : (
                     <a
                       className="btn primary full"
-                      href="/entrar"
+                      href="/entrar?destino=carrinho"
                       target="_top"
                     >
                       Entrar para continuar <ArrowRight size={16} />
@@ -1603,6 +1634,11 @@ export default function Nimbus() {
               signedOut("Seu conhecimento merece um lugar só.")
             ) : (
               <>
+                <LearnerStart
+                  items={library}
+                  onOpen={(item) => openReader(item as LibraryItem)}
+                  onExplore={() => go("gratuitos")}
+                />
                 <div className="stats">
                   <Stat
                     icon={<Library />}
@@ -1869,7 +1905,14 @@ export default function Nimbus() {
           <section className="container page-section">
             <span className="eyebrow">CRIE, COMPARTILHE, RECEBA</span>
             <h1>Espaço do autor.</h1>
-            {user ? <AuthorStudio /> : signedOut("Publique seus materiais")}
+            {user ? (
+              <AuthorStudio
+                initialTab={authorTab}
+                onTabChange={(tab) => go("autores/" + tab)}
+              />
+            ) : (
+              signedOut("Publique seus materiais")
+            )}
           </section>
         )}
         {view === "notificacoes" &&
@@ -1893,332 +1936,294 @@ export default function Nimbus() {
               />
             ) : admin ? (
               <>
-                <div className="stats">
-                  <Stat
-                    icon={<UserRound />}
-                    value={admin.users.length}
-                    label="Pessoas cadastradas"
-                  />
-                  <Stat
-                    icon={<FileText />}
-                    value={
-                      admin.products.filter((p) => p.status === "pending")
-                        .length
-                    }
-                    label="Materiais em análise"
-                  />
-                  <Stat
-                    icon={<BarChart3 />}
-                    value={money(
-                      admin.orders
-                        .filter((o) => o.status === "paid")
-                        .reduce((s, o) => s + o.total, 0),
+                <div className="admin-shell">
+                  <AdminNavigation active={adminTab} onNavigate={go} />
+                  <div className="admin-content">
+                    {adminTab === "resumo" && (
+                      <AdminOverview onNavigate={go} name={user.name} />
                     )}
-                    label="Total de pedidos confirmados"
-                  />
-                </div>
-                <div className="tabs">
-                  {[
-                    "ideias",
-                    "cupons",
-                    "coleções",
-                    "sugestões",
-                    "correções",
-                    "aprovações",
-                    "indicadores",
-                    "operação",
-                    "produtos",
-                    "pedidos",
-                    "pessoas",
-                    "atendimento",
-                    "histórico",
-                    "financeiro",
-                    "privacidade",
-                  ].map((t) => (
-                    <button
-                      key={t}
-                      className={adminTab === t ? "active" : ""}
-                      onClick={() => setAdminTab(t)}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-                {adminTab === "ideias" && <CommercialPlan />}
-                {adminTab === "cupons" && <CouponsAdmin />}
-                {adminTab === "coleções" && <CollectionsAdmin />}
-                {adminTab === "sugestões" && (
-                  <CommunityPanel kind="requests" manage />
-                )}
-                {adminTab === "correções" && (
-                  <CommunityPanel kind="issues" manage />
-                )}
-                {adminTab === "aprovações" && (
-                  <EditorialPanel
-                    products={admin.products}
-                    onRefresh={async () => {
-                      setAdmin(await api("admin"));
-                      await loadCatalog();
-                    }}
-                  />
-                )}
-                {adminTab === "indicadores" && <AnalyticsPanel />}
-                {adminTab === "operação" && <OperationsPanel />}
-                {adminTab === "privacidade" && <PrivacyCenter admin signedIn />}
-                {adminTab === "financeiro" && (
-                  <>
-                    <button
-                      className="btn secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        action(async () => {
-                          setFinanceData(await api("finance"));
-                        })
-                      }
-                    >
-                      Carregar / atualizar financeiro
-                    </button>
-                    {financeData && (
-                      <FinancePanel
-                        report={financeData.finance}
-                        accounts={financeData.accounts}
-                        onAction={async (data) => {
-                          await api("finance", data);
-                          setFinanceData(await api("finance"));
-                          notify("Financeiro atualizado.");
+                    {adminTab === "ideias" && <CommercialPlan />}
+                    {adminTab === "cupons" && <CouponsAdmin />}
+                    {adminTab === "coleções" && <CollectionsAdmin />}
+                    {adminTab === "sugestões" && (
+                      <CommunityPanel kind="requests" manage />
+                    )}
+                    {adminTab === "correções" && (
+                      <CommunityPanel kind="issues" manage />
+                    )}
+                    {adminTab === "aprovações" && (
+                      <EditorialPanel
+                        products={admin.products}
+                        onRefresh={async () => {
+                          setAdmin(await api("admin"));
+                          await loadCatalog();
                         }}
                       />
                     )}
-                  </>
-                )}{" "}
-                {adminTab === "produtos" && (
-                  <div className="panel table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Material</th>
-                          <th>Autor</th>
-                          <th>Preço</th>
-                          <th>Status</th>
-                          <th>Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {admin.products.map((p) => (
-                          <tr key={p.id}>
-                            <td>
-                              <strong>{p.title}</strong>
-                              <small>
-                                {p.category}
-                                {p.demo === 1 ? " · demonstração" : ""}
-                              </small>
-                            </td>
-                            <td>{p.author}</td>
-                            <td>{money(p.price)}</td>
-                            <td>
-                              <Status value={p.status} />
-                            </td>
-                            <td>
-                              <button
-                                className="text-link"
-                                onClick={() => setDetail(p)}
-                              >
-                                Ver prévia
-                              </button>
-                              {p.file_key && (
-                                <>
-                                  <a
-                                    className="text-link"
-                                    href={"/api/admin-file/" + p.id}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    Revisar arquivo <ArrowUpRight size={12} />
-                                  </a>
-                                  <button
-                                    className="btn secondary small"
-                                    disabled={busy}
-                                    onClick={() =>
-                                      action(async () => {
-                                        await api("admin", {
-                                          action: "product",
-                                          id: p.id,
-                                          status:
-                                            p.status === "published"
-                                              ? "draft"
-                                              : "published",
-                                        });
-                                        setAdmin(await api("admin"));
-                                        await loadCatalog();
-                                        notify("Status atualizado.");
-                                      })
-                                    }
-                                  >
-                                    {p.status === "published"
-                                      ? "Retirar"
-                                      : "Publicar"}
-                                  </button>
-                                  <button
-                                    className="remove"
-                                    disabled={busy}
-                                    onClick={() =>
-                                      action(async () => {
-                                        await api("admin", {
-                                          action: "product",
-                                          id: p.id,
-                                          status: "rejected",
-                                        });
-                                        setAdmin(await api("admin"));
-                                        notify("Material rejeitado.");
-                                      })
-                                    }
-                                  >
-                                    Rejeitar
-                                  </button>
-                                </>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {adminTab === "pedidos" && (
-                  <div className="panel table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Pedido</th>
-                          <th>Cliente</th>
-                          <th>Data</th>
-                          <th>Total</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {admin.orders.map((o) => (
-                          <tr key={o.id}>
-                            <td>{o.id.slice(0, 8)}</td>
-                            <td>
-                              {o.name}
-                              <small>{o.email}</small>
-                            </td>
-                            <td>{date(o.created)}</td>
-                            <td>{money(o.total)}</td>
-                            <td>
-                              <Status value={o.status} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {!admin.orders.length && <p>Nenhum pedido registrado.</p>}
-                  </div>
-                )}
-                {adminTab === "pessoas" && (
-                  <div className="panel table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Pessoa</th>
-                          <th>E-mail</th>
-                          <th>Cadastro</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {admin.users.map((u) => (
-                          <tr key={u.id}>
-                            <td>{u.name}</td>
-                            <td>{u.email}</td>
-                            <td>{date(u.created)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {adminTab === "atendimento" && (
-                  <div>
-                    {admin.tickets.map((t) => (
-                      <form
-                        className="panel form ticket"
-                        key={t.id}
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const data = new FormData(e.currentTarget);
-                          action(async () => {
-                            await api("admin", {
-                              action: "ticket",
-                              id: t.id,
-                              response: data.get("response"),
-                            });
-                            setAdmin(await api("admin"));
-                            notify("Resposta registrada.");
-                          });
-                        }}
-                      >
-                        <div className="order-heading">
-                          <h3>{t.subject}</h3>
-                          <Status value={t.status} />
-                        </div>
-                        <small>
-                          {t.email} · {date(t.created)}
-                        </small>
-                        <p className="pre-line">{t.message}</p>
-                        {t.status === "open" ? (
-                          <>
-                            <label>
-                              Resposta
-                              <textarea
-                                name="response"
-                                minLength={5}
-                                maxLength={5000}
-                                required
-                              />
-                            </label>
-                            <button className="btn primary" disabled={busy}>
-                              Responder e encerrar
-                            </button>
-                          </>
-                        ) : (
-                          <p className="notice">{t.response}</p>
+                    {adminTab === "indicadores" && <AnalyticsPanel />}
+                    {adminTab === "operação" && <OperationsPanel />}
+                    {adminTab === "privacidade" && (
+                      <PrivacyCenter admin signedIn />
+                    )}
+                    {adminTab === "financeiro" && (
+                      <>
+                        <button
+                          className="btn secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            action(async () => {
+                              setFinanceData(await api("finance"));
+                            })
+                          }
+                        >
+                          Carregar / atualizar financeiro
+                        </button>
+                        {financeData && (
+                          <FinancePanel
+                            report={financeData.finance}
+                            accounts={financeData.accounts}
+                            onAction={async (data) => {
+                              await api("finance", data);
+                              setFinanceData(await api("finance"));
+                              notify("Financeiro atualizado.");
+                            }}
+                          />
                         )}
-                      </form>
-                    ))}
-                    {!admin.tickets.length && (
-                      <Empty
-                        icon={<MessageCircle />}
-                        title="Tudo em dia."
-                        text="Nenhuma solicitação de suporte."
-                      />
+                      </>
+                    )}{" "}
+                    {adminTab === "produtos" && (
+                      <div className="panel table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Material</th>
+                              <th>Autor</th>
+                              <th>Preço</th>
+                              <th>Status</th>
+                              <th>Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {admin.products.map((p) => (
+                              <tr key={p.id}>
+                                <td>
+                                  <strong>{p.title}</strong>
+                                  <small>
+                                    {p.category}
+                                    {p.demo === 1 ? " · demonstração" : ""}
+                                  </small>
+                                </td>
+                                <td>{p.author}</td>
+                                <td>{money(p.price)}</td>
+                                <td>
+                                  <Status value={p.status} />
+                                </td>
+                                <td>
+                                  <button
+                                    className="text-link"
+                                    onClick={() => setDetail(p)}
+                                  >
+                                    Ver prévia
+                                  </button>
+                                  {p.file_key && (
+                                    <>
+                                      <a
+                                        className="text-link"
+                                        href={"/api/admin-file/" + p.id}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        Revisar arquivo{" "}
+                                        <ArrowUpRight size={12} />
+                                      </a>
+                                      <button
+                                        className="btn secondary small"
+                                        disabled={busy}
+                                        onClick={() =>
+                                          action(async () => {
+                                            await api("admin", {
+                                              action: "product",
+                                              id: p.id,
+                                              status:
+                                                p.status === "published"
+                                                  ? "draft"
+                                                  : "published",
+                                            });
+                                            setAdmin(await api("admin"));
+                                            await loadCatalog();
+                                            notify("Status atualizado.");
+                                          })
+                                        }
+                                      >
+                                        {p.status === "published"
+                                          ? "Retirar"
+                                          : "Publicar"}
+                                      </button>
+                                      <button
+                                        className="remove"
+                                        disabled={busy}
+                                        onClick={() =>
+                                          action(async () => {
+                                            await api("admin", {
+                                              action: "product",
+                                              id: p.id,
+                                              status: "rejected",
+                                            });
+                                            setAdmin(await api("admin"));
+                                            notify("Material rejeitado.");
+                                          })
+                                        }
+                                      >
+                                        Rejeitar
+                                      </button>
+                                    </>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {adminTab === "pedidos" && (
+                      <div className="panel table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Pedido</th>
+                              <th>Cliente</th>
+                              <th>Data</th>
+                              <th>Total</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {admin.orders.map((o) => (
+                              <tr key={o.id}>
+                                <td>{o.id.slice(0, 8)}</td>
+                                <td>
+                                  {o.name}
+                                  <small>{o.email}</small>
+                                </td>
+                                <td>{date(o.created)}</td>
+                                <td>{money(o.total)}</td>
+                                <td>
+                                  <Status value={o.status} />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {!admin.orders.length && (
+                          <p>Nenhum pedido registrado.</p>
+                        )}
+                      </div>
+                    )}
+                    {adminTab === "pessoas" && (
+                      <div className="panel table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Pessoa</th>
+                              <th>E-mail</th>
+                              <th>Cadastro</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {admin.users.map((u) => (
+                              <tr key={u.id}>
+                                <td>{u.name}</td>
+                                <td>{u.email}</td>
+                                <td>{date(u.created)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {adminTab === "atendimento" && (
+                      <div>
+                        {admin.tickets.map((t) => (
+                          <form
+                            className="panel form ticket"
+                            key={t.id}
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const data = new FormData(e.currentTarget);
+                              action(async () => {
+                                await api("admin", {
+                                  action: "ticket",
+                                  id: t.id,
+                                  response: data.get("response"),
+                                });
+                                setAdmin(await api("admin"));
+                                notify("Resposta registrada.");
+                              });
+                            }}
+                          >
+                            <div className="order-heading">
+                              <h3>{t.subject}</h3>
+                              <Status value={t.status} />
+                            </div>
+                            <small>
+                              {t.email} · {date(t.created)}
+                            </small>
+                            <p className="pre-line">{t.message}</p>
+                            {t.status === "open" ? (
+                              <>
+                                <label>
+                                  Resposta
+                                  <textarea
+                                    name="response"
+                                    minLength={5}
+                                    maxLength={5000}
+                                    required
+                                  />
+                                </label>
+                                <button className="btn primary" disabled={busy}>
+                                  Responder e encerrar
+                                </button>
+                              </>
+                            ) : (
+                              <p className="notice">{t.response}</p>
+                            )}
+                          </form>
+                        ))}
+                        {!admin.tickets.length && (
+                          <Empty
+                            icon={<MessageCircle />}
+                            title="Tudo em dia."
+                            text="Nenhuma solicitação de suporte."
+                          />
+                        )}
+                      </div>
+                    )}
+                    {adminTab === "histórico" && (
+                      <div className="panel table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Quando</th>
+                              <th>Ação</th>
+                              <th>Referência</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {admin.audit.map((a) => (
+                              <tr key={a.id}>
+                                <td>
+                                  {new Date(a.created).toLocaleString("pt-BR")}
+                                </td>
+                                <td>{a.action}</td>
+                                <td>{a.target}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
-                )}
-                {adminTab === "histórico" && (
-                  <div className="panel table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Quando</th>
-                          <th>Ação</th>
-                          <th>Referência</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {admin.audit.map((a) => (
-                          <tr key={a.id}>
-                            <td>
-                              {new Date(a.created).toLocaleString("pt-BR")}
-                            </td>
-                            <td>{a.action}</td>
-                            <td>{a.target}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                </div>
               </>
             ) : (
               <div className="loading">
@@ -2518,6 +2523,7 @@ export default function Nimbus() {
           </section>
         )}
         {![
+          "conta",
           "gratuitos",
           "colecoes",
           "interesses",

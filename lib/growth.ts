@@ -1,3 +1,4 @@
+import { financialReport } from "./finance";
 import { commercialIdeas } from "./commercial-ideas";
 import type { StoreRuntime } from "./catalog-services";
 import { publicProducts, publicDTO, entitlement } from "./catalog-services";
@@ -114,6 +115,31 @@ export async function growth(
     e.DB.prepare(s)
       .bind(...a)
       .run();
+  if (path === "admin-overview" && method === "GET") {
+    const u = await auth(req);
+    if (!u.admin) fail("Acesso restrito à administração.", 403);
+    const [counts, finance] = await Promise.all([
+      rows(
+        e,
+        `SELECT (SELECT COUNT(*) FROM orders WHERE status='paid') orders,(SELECT COALESCE(SUM(total),0) FROM orders WHERE status='paid') gross,(SELECT COUNT(*) FROM products WHERE status='pending' AND demo=0) pending_products,(SELECT COUNT(*) FROM products WHERE status='published' AND demo=0) published,(SELECT COUNT(*) FROM products WHERE status='draft' AND demo=0) drafts,(SELECT COUNT(*) FROM tickets WHERE status!='closed') tickets,(SELECT COUNT(*) FROM content_issues WHERE status IN ('open','in_progress')) corrections,(SELECT COUNT(*) FROM commercial_plan WHERE status IN ('planned','producing')) ideas`,
+      ),
+      financialReport(e),
+    ]);
+    return json({
+      overview: {
+        ...counts[0],
+        nimbus_net: finance.entries.reduce(
+          (s, x) =>
+            s +
+            Number(x.platform) -
+            (Number(x.refunded_gross) - Number(x.refunded_author)),
+          0,
+        ),
+        author_payable: finance.balances.reduce((s, x) => s + x.payable, 0),
+        finance_pending: finance.pending.length,
+      },
+    });
+  }
   if (path === "commercial-plan") {
     const u = await auth(req);
     if (!u.admin) fail("Acesso restrito à administração.", 403);

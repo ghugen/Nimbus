@@ -1342,6 +1342,43 @@ try {
     },
     403,
   );
+  await expectStatus("admin-overview", { user: null }, 401);
+  await expectStatus("admin-overview", { user: "fred" }, 403);
+  const overview = (
+    await (await expectStatus("admin-overview", { user: "admin" }, 200)).json()
+  ).overview;
+  assert.equal(
+    overview.orders,
+    db.prepare("SELECT COUNT(*) n FROM orders WHERE status='paid'").get().n,
+  );
+  assert.equal(
+    overview.gross,
+    db
+      .prepare(
+        "SELECT COALESCE(SUM(total),0) n FROM orders WHERE status='paid'",
+      )
+      .get().n,
+  );
+  assert.equal(
+    overview.pending_products,
+    db
+      .prepare(
+        "SELECT COUNT(*) n FROM products WHERE status='pending' AND demo=0",
+      )
+      .get().n,
+  );
+  assert.equal(
+    overview.corrections,
+    db
+      .prepare(
+        "SELECT COUNT(*) n FROM content_issues WHERE status IN ('open','in_progress')",
+      )
+      .get().n,
+  );
+  assert.equal(overview.ideas, 1);
+  assert.equal(typeof overview.nimbus_net, "number");
+  assert(!JSON.stringify(overview).includes("@"));
+  checks++;
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );
