@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Nimbus — Identidade visual</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #faf7f0;
+        color: #24212b;
+        font:
+          15px/1.7 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1000px;
+        margin: auto;
+        padding: 50px 25px;
+      }
+      h1 {
+        font-size: 40px;
+        letter-spacing: -2px;
+        margin: 10px 0;
+      }
+      h2 {
+        font-size: 24px;
+        margin-top: 45px;
+      }
+      p {
+        max-width: 650px;
+        color: #665f70;
+      }
+      small {
+        letter-spacing: 2px;
+      }
+      article {
+        border: 2px solid #24212b;
+        background: #fffdfa;
+        padding: 35px;
+        box-shadow: 5px 5px 0 #24212b;
+        margin: 25px 0;
+        border-radius: 7px;
+      }
+      article img {
+        max-width: 420px;
+        width: 100%;
+        display: block;
+        margin: auto;
+      }
+      .versions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .versions article {
+        margin: 0;
+      }
+      .reversed {
+        background: #24212b;
+      }
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+      }
+      .swatches div {
+        border: 1px solid #24212b;
+        border-radius: 5px;
+        padding: 16px;
+        min-height: 110px;
+        color: #24212b;
+      }
+      .swatches strong,
+      .swatches code {
+        display: block;
+      }
+      a {
+        color: #5941a9;
+      }
+      li {
+        margin-bottom: 8px;
+      }
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+      }
+      @media (max-width: 600px) {
+        .versions {
+          grid-template-columns: 1fr;
+        }
+        .swatches {
+          grid-template-columns: 1fr 1fr;
+        }
+        h1 {
+          font-size: 32px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <small>GUIA DE IDENTIDADE · NIMBUS</small>
+      <h1>Ideias claras.<br />Conhecimento que fica.</h1>
+      <p>
+        Uma identidade editorial com neobrutalismo moderado. O símbolo combina
+        uma nuvem geométrica e uma dobra de página, conectando acervo digital e
+        materiais de estudo.
+      </p>
+      <article>
+        <img src="nimbus-horizontal.svg" alt="Logo horizontal Nimbus" />
+      </article>
+      <div class="versions">
+        <article>
+          <img src="nimbus-monochrome.svg" alt="Versão monocromática" />
+        </article>
+        <article class="reversed">
+          <img src="nimbus-reversed.svg" alt="Versão para fundo escuro" />
+        </article>
+      </div>
+      <h2>Paleta</h2>
+      <div class="swatches">
+        <div style="background: #faf7f0">
+          <strong>Marfim</strong><code>#FAF7F0</code>
+        </div>
+        <div style="background: #24212b; color: #faf7f0">
+          <strong>Preto tinta</strong><code>#24212B</code>
+        </div>
+        <div style="background: #b9a3f5">
+          <strong>Lilás Nimbus</strong><code>#B9A3F5</code>
+        </div>
+        <div style="background: #5941a9; color: white">
+          <strong>Roxo profundo</strong><code>#5941A9</code>
+        </div>
+        <div style="background: #f4d76e">
+          <strong>Amarelo manteiga</strong><code>#F4D76E</code>
+        </div>
+        <div style="background: #bfd5bc">
+          <strong>Verde sálvia</strong><code>#BFD5BC</code>
+        </div>
+        <div style="background: #efa394">
+          <strong>Coral suave</strong><code>#EFA394</code>
+        </div>
+      </div>
+      <h2>Tipografia e uso</h2>
+      <ul>
+        <li>Manrope em títulos e marca; DM Sans em textos e interfaces.</li>
+        <li>
+          Usar texto escuro nos fundos claros e branco sobre roxo profundo.
+        </li>
+        <li>
+          Preservar a proporção e uma área livre equivalente à dobra em torno do
+          símbolo.
+        </li>
+        <li>
+          Preferir o símbolo isolado em ícones pequenos; evitar textos
+          minúsculos.
+        </li>
+        <li>
+          Capas: marca no topo, título em destaque, disciplina, autor e
+          identificação do tipo de material.
+        </li>
+        <li>
+          Bordas escuras e sombras sem desfoque na vitrine; tabelas e leitura
+          com menos decoração.
+        </li>
+      </ul>
+      <p>
+        As versões SVG da assinatura usam tipografia com fallback. Para produção
+        gráfica final, instalar Manrope ou converter o texto em curvas no editor
+        vetorial. O desenho não implica confirmação de disponibilidade ou
+        registro da marca.
+      </p>
+      <h2>Arquivos vetoriais</h2>
+      <div class="links">
+        <a href="nimbus-horizontal.svg" download>Horizontal</a
+        ><a href="nimbus-symbol.svg" download>Símbolo</a
+        ><a href="nimbus-icon.svg" download>Ícone</a
+        ><a href="nimbus-monochrome.svg" download>Monocromática</a
+        ><a href="nimbus-reversed.svg" download>Fundo escuro</a>
+      </div>
+      <p><a href="/">Voltar para a Nimbus</a></p>
+    </main>
+  </body>
+</html>

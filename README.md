@@ -170,3 +170,7 @@ Neobrutalismo moderado com inspiração editorial: marfim `#FAF7F0`, preto tinta
 A página de privacidade permite exportação JSON autenticada e solicitações de acesso, correção, exclusão, oposição e informações, com protocolo e acompanhamento. A administração possui aba **Privacidade** para configurar responsável, e-mail público e retenção, além de responder solicitações. Os aceites de compra e condições do autor ficam registrados separadamente; não são tratados como consentimento genérico de LGPD.
 
 A central não envia e-mails, não executa exclusão automática nem configura backups. Os campos da operação precisam ser preenchidos, os prazos de atendimento acompanhados e as bases legais, os fornecedores e a retenção revisados antes das vendas. Consulte `docs/PRIVACIDADE_OPERACAO.md`. A presença desses controles não certifica adequação integral à LGPD.
+
+## Marca Nimbus
+
+Símbolo vetorial próprio de nuvem geométrica com dobra de página, aplicado na interface, capas e ícones. Assinaturas horizontal, monocromática, invertida e símbolo isolado estão em `public/brand/`. O guia visual navegável é `/brand/index.html`. As assinaturas em SVG usam texto com fallback; para produção gráfica final, instalar Manrope ou converter texto em curvas. Esses arquivos não substituem pesquisa de disponibilidade e registro de marca.

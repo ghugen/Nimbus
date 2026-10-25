@@ -1,4 +1,5 @@
 "use client";
+import { BrandGlyph } from "@/components/brand-glyph";
 import { PrivacyCenter } from "@/components/privacy-center";
 import { FinancePanel, EarningsPreview } from "@/components/finance-panel";
 import type {
@@ -585,7 +586,7 @@ export default function Nimbus() {
         <div className="header-inner">
           <a className="logo" href="#inicio" aria-label="Nimbus início">
             <span className="logo-mark">
-              <Cloud size={23} />
+              <BrandGlyph size={23} />
             </span>
             nimbus<span className="logo-dot">.</span>
           </a>
@@ -808,7 +809,7 @@ export default function Nimbus() {
                 </div>
                 <div className="hero-book front-book">
                   <span className="book-brand">
-                    <Cloud size={16} /> nimbus.
+                    <BrandGlyph size={16} /> nimbus.
                   </span>
                   <div className="book-label">COLEÇÃO ACADÊMICA / 01</div>
                   <h3>
@@ -2781,7 +2782,7 @@ export default function Nimbus() {
           <div>
             <a className="logo" href="#inicio">
               <span className="logo-mark">
-                <Cloud size={23} />
+                <BrandGlyph size={23} />
               </span>
               nimbus<span className="logo-dot">.</span>
             </a>
@@ -2813,7 +2814,7 @@ export default function Nimbus() {
           </div>
           <div className="footer-message">
             <span>
-              <Cloud size={21} />
+              <BrandGlyph size={21} />
             </span>
             <h3>
               Um universo de ideias.
@@ -3105,7 +3106,7 @@ function Cover({ p, index }: { p: Product; index: number }) {
     <div className={"cover " + tone}>
       <div className="cover-top">
         <span>
-          <Cloud size={13} /> nimbus.
+          <BrandGlyph size={13} /> nimbus.
         </span>
         <span>{p.format.toUpperCase()}</span>
       </div>
