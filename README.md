@@ -263,3 +263,7 @@ Validação desta entrega: TypeScript, build de produção, 8 testes unitários 
 O worker do PDF.js é copiado da dependência travada por `scripts/prepare-pdf-worker.mjs` antes de desenvolvimento/build e servido como arquivo estático versionado. Isso evita injetar o runtime de desenvolvimento dentro do Web Worker. A captura `docs/nimbus-reader-mobile.jpg` registra navegação e busca no leitor a 390 px com PDF original público, sem simular acesso privado.
 
 Consulte [Estudo avançado e assistência editorial](docs/ESTUDO_AVANCADO.md) para simulados, revisões, atlas, OCR e configuração pendente da IA.
+
+### Testes de volume
+
+`npm run test:stress` executa 30.000 cenários em cada um dos 15 grupos, em SQLite isolado e com provedores simulados. Pode levar vários minutos. Não envia tráfego para a Nimbus publicada, não cobra pagamentos e não envia e-mails externos. Para ensaio rápido use `NIMBUS_STRESS_ROUNDS=100 npm run test:stress`. As limitações de cada grupo e os resultados estão em [relatório de testes de volume](docs/testes/2026-10-26/RELATORIO.md). Testes de navegação não substituem verificação visual em dispositivos reais; as simulações não validam integrações externas reais.
