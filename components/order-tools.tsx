@@ -55,7 +55,7 @@ export function OrderTools({
           Baixar comprovante
         </button>
       )}
-      {order.status === "pending" && (
+      {["pending","failed"].includes(order.status) && (
         <button
           className="btn secondary small"
           onClick={async () => {

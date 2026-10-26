@@ -41,6 +41,8 @@ export async function couponQuote(
   items: { id: string; price: number; owned?: number }[],
   userId: string,
 ) {
+  const restricted=(await rows(e,"SELECT user_id FROM coupon_restrictions WHERE code=?",code.trim().toUpperCase()))[0];
+  if(restricted && restricted.user_id!==userId)fail("Este cupom é pessoal e pertence a outra conta.",403);
   const c = (
     await rows<Coupon>(
       e,

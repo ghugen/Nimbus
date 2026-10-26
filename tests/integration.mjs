@@ -1,3 +1,10 @@
+import { PDFDocument, StandardFonts } from "pdf-lib";
+async function fixturePdf(text = "Original fixture") {
+  const d = await PDFDocument.create(),
+    f = await d.embedFont(StandardFonts.Helvetica);
+  d.addPage().drawText(text, { font: f });
+  return d.save({ useObjectStreams: false });
+}
 import { DatabaseSync } from "node:sqlite";
 import { restoreSnapshot } from "../scripts/restore-backup.mjs";
 import { readFile, mkdtemp, rm, readdir } from "node:fs/promises";
@@ -61,6 +68,8 @@ globalThis.__NIMBUS_TEST_ENV__ = {
   ADMIN_EMAILS: "admin@nimbus.test",
   STRIPE_SECRET_KEY: "sk_test_fake",
   STRIPE_WEBHOOK_SECRET: "whsec_fake",
+  STRIPE_WEBHOOK_READY: "1",
+  STRIPE_SUBSCRIPTIONS_READY: "1",
 };
 const temp = await mkdtemp(join(tmpdir(), "nimbus-test-"));
 let checks = 0;
@@ -324,7 +333,7 @@ try {
   form.set("id", saved.id);
   form.set(
     "file",
-    new File(["%PDF-1.4\nTest fixture only."], "test.pdf", {
+    new File([await fixturePdf("Test fixture only.")], "test.pdf", {
       type: "application/pdf",
     }),
   );
@@ -679,7 +688,7 @@ try {
     const r = await sendFile(
       p.id,
       "original.pdf",
-      "%PDF-1.4\nOriginal " + title,
+      await fixturePdf("Original " + title),
     );
     assert.equal(r.status, 200, await r.text());
     checks++;
@@ -833,7 +842,7 @@ try {
   const update = await sendFile(
     child1,
     "nova-versao.pdf",
-    "%PDF-1.4\nNova versão de teste",
+    await fixturePdf("Nova versao de teste"),
   );
   assert.equal(update.status, 200, await update.text());
   checks++;
@@ -865,7 +874,7 @@ try {
       200,
     )
   ).text();
-  assert(updatedBody.includes("Nova versão"));
+  assert(updatedBody.startsWith("%PDF-"));
   assert.equal(
     await (await call("download/" + child1, { user: "dora" })).text(),
     originalBody,
@@ -2129,6 +2138,840 @@ try {
         .get().n,
     );
     recoveryDb.close();
+    checks++;
+  }
+  {
+    // Newly connected workflows: genuine PDF structure, access boundaries and financial snapshots.
+    await expectStatus("integration-readiness", {}, 403);
+    const readiness = await (
+      await expectStatus("integration-readiness", { user: "admin" }, 200)
+    ).json();
+    assert.equal(readiness.payments.ready, true);
+    assert.equal(readiness.payments.mode, "test");
+    checks++;
+    globalThis.__NIMBUS_TEST_ENV__.STRIPE_WEBHOOK_READY = "0";
+    assert.equal(
+      (await (await call("catalog", { user: null })).json()).payments,
+      false,
+    );
+    checks++;
+    await expectStatus(
+      "subscription-checkout",
+      { user: "gate-check", body: { accepted: true, plan_id: "none" } },
+      503,
+    );
+    globalThis.__NIMBUS_TEST_ENV__.STRIPE_WEBHOOK_READY = "1";
+    await expectStatus(
+      "demand-board",
+      { user: null, body: { title: "No auth" } },
+      401,
+    );
+    await expectStatus(
+      "demand-board",
+      {
+        user: "idea-author",
+        body: {
+          title: "Mapa de mecanismos de estudo",
+          course: "Graduação",
+          subject: "Métodos",
+          description:
+            "Quero relacionar os conceitos e praticar explicações sem consultar as respostas.",
+        },
+      },
+      200,
+    );
+    const idea = (
+      await (await call("demand-mine", { user: "idea-author" })).json()
+    ).ideas[0];
+    assert(
+      !(await (await call("demand-board", { user: null })).json()).ideas.some(
+        (x) => x.id === idea.id,
+      ),
+    );
+    checks++;
+    await expectStatus(
+      "demand-admin",
+      { user: "idea-author", body: { id: idea.id, status: "open" } },
+      403,
+    );
+    await expectStatus(
+      "demand-admin",
+      {
+        user: "admin",
+        body: {
+          id: idea.id,
+          status: "open",
+          response: "Tema recebido para avaliação editorial.",
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "demand-board",
+      {
+        user: "idea-voter",
+        body: { action: "vote", id: idea.id, active: true },
+      },
+      200,
+    );
+    await expectStatus(
+      "demand-board",
+      {
+        user: "idea-voter",
+        body: { action: "vote", id: idea.id, active: true },
+      },
+      200,
+    );
+    assert.equal(
+      (await (await call("demand-board", { user: null })).json()).ideas.find(
+        (x) => x.id === idea.id,
+      ).votes,
+      1,
+    );
+    checks++;
+    const demo = await (
+      await expectStatus("demo-learning", { user: null }, 200)
+    ).json();
+    assert.equal(demo.questions.length, 3);
+    assert(!("correct" in demo.questions[0]));
+    checks++;
+    const quiz = await (
+      await expectStatus(
+        "demo-quiz",
+        { user: null, body: { answers: [1, 1, 2] } },
+        200,
+      )
+    ).json();
+    assert.equal(quiz.score, 3);
+    checks++;
+    await expectStatus(
+      "demo-quiz",
+      { user: null, body: { answers: [1] } },
+      400,
+    );
+    const sources = await (
+      await expectStatus(
+        "demo-assistant",
+        {
+          user: null,
+          body: { question: "Como conferir a resposta na revisão?" },
+        },
+        200,
+      )
+    ).json();
+    assert(sources.sources.length > 0);
+    assert(sources.sources.every((s) => s.page >= 1 && s.page <= 3));
+    checks++;
+    await expectStatus(
+      "study-assistant",
+      {
+        user: "pdf-outsider",
+        body: { product_id: saved.id, question: "Qual o conteúdo original?" },
+      },
+      403,
+    );
+    const pdfBytes = await fixturePdf(
+      "Aprendizado original e revisao ativa com feedback.",
+    );
+    const pdfFile = new FormData();
+    pdfFile.set("id", saved.id);
+    pdfFile.set(
+      "file",
+      new File(["%PDF-1.4 broken"], "broken.pdf", { type: "application/pdf" }),
+    );
+    const badPdf = await POST(
+      new Request("https://nimbus.test/api/upload", {
+        method: "POST",
+        headers: {
+          origin: "https://nimbus.test",
+          "oai-authenticated-user-id": "alice",
+          "oai-authenticated-user-email": "alice@nimbus.test",
+        },
+        body: pdfFile,
+      }),
+    );
+    assert.equal(badPdf.status, 400);
+    checks++;
+    // Existing paid purchase retains its original valid PDF and receives an opaque copy code.
+    db.prepare(
+      "INSERT INTO orders(id,user_id,status,total,created) VALUES('copy-pdf-fixture','alice','paid',1990,?)",
+    ).run(new Date().toISOString());
+    db.prepare(
+      "INSERT INTO order_items(id,order_id,product_id,author_id,commission_bps,owned,policy_version,price,title,file_key,file_name,content) SELECT 'copy-pdf-item','copy-pdf-fixture',product_id,author_id,commission_bps,owned,policy_version,price,title,file_key,file_name,content FROM order_items WHERE order_id=? LIMIT 1",
+    ).run(checkout.order);
+    const marked = await expectStatus(
+      "download/" + saved.id,
+      { user: "alice" },
+      200,
+    );
+    assert.equal(marked.headers.get("X-Nimbus-Watermark"), "applied");
+    const markedBytes = new Uint8Array(await marked.arrayBuffer());
+    const markedDoc = await PDFDocument.load(markedBytes);
+    assert.equal(markedDoc.getPageCount(), 1);
+    const copy = db
+      .prepare("SELECT * FROM download_copies WHERE user_id=? AND product_id=?")
+      .get("alice", saved.id);
+    assert(copy);
+    assert(!copy.copy_code.includes("alice"));
+    checks++;
+    await expectStatus(
+      "copy-lookup?code=" + copy.copy_code,
+      { user: "outsider" },
+      403,
+    );
+    assert.equal(
+      (
+        await (
+          await call("copy-lookup?code=" + copy.copy_code, { user: "admin" })
+        ).json()
+      ).copies.length,
+      1,
+    );
+    checks++;
+    await expectStatus(
+      "product-policy",
+      { user: "outsider", body: { product_id: saved.id, watermark: false } },
+      403,
+    );
+    await expectStatus(
+      "product-policy",
+      {
+        user: "alice",
+        body: { product_id: saved.id, ai_enabled: true, watermark: true },
+      },
+      400,
+    );
+    await expectStatus(
+      "product-policy",
+      {
+        user: "alice",
+        body: {
+          product_id: saved.id,
+          ai_enabled: true,
+          watermark: true,
+          accepted: true,
+        },
+      },
+      200,
+    );
+    assert.equal(
+      (
+        await (
+          await call("study-assistant?id=" + saved.id, { user: "alice" })
+        ).json()
+      ).ai_available,
+      false,
+    );
+    checks++;
+    await expectStatus(
+      "review-schedule",
+      {
+        user: "alice",
+        body: {
+          product_id: saved.id,
+          next_review: "2020-01-01",
+          pause_sales: true,
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "checkout",
+      { user: "review-blocked", body: { ids: [saved.id], accepted: true } },
+      409,
+    );
+    // Historical purchases remain accessible when new sales pause.
+    await expectStatus("download/" + saved.id, { user: "alice" }, 200);
+    await expectStatus("review-queue", { user: "pdf-outsider" }, 403);
+    await expectStatus(
+      "review-queue",
+      {
+        user: "admin",
+        body: {
+          product_id: saved.id,
+          next_review: new Date(Date.now() + 30 * 86400000)
+            .toISOString()
+            .slice(0, 10),
+          notes: "Conteúdo e referências conferidos para o teste.",
+          checked: true,
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "permission-review",
+      {
+        user: "admin",
+        body: {
+          checked: true,
+          notes: "Conferidas as permissões atuais da equipe e administração.",
+        },
+      },
+      200,
+    );
+    await expectStatus("permission-review", { user: "outsider" }, 403);
+    // Institution proposals keep prices and files fixed after explicit acceptance.
+    await call("me", { user: "institution-buyer" });
+    await call("me", { user: "affiliate-owner" });
+    await call("me", { user: "referred-buyer" });
+    await call("me", { user: "other-buyer" });
+    const commercialId = "real-owned-workflow-test",
+      commercialKey = "workflow-original.pdf";
+    objects.set(commercialKey, pdfBytes);
+    db.prepare(
+      "INSERT INTO products(id,author_id,title,description,category,subject,course,format,price,pages,author,preview,status,file_key,file_name,accepted_bps,accepted_owned,created) VALUES(?,'admin','Roteiro original de revisão','Material original para validar a operação acadêmica','Saúde','Métodos','Graduação','Resumos e apostilas',3000,1,'Nimbus','Amostra original do conteúdo','published',?,'original.pdf',0,1,?)",
+    ).run(commercialId, commercialKey, new Date().toISOString());
+    await expectStatus(
+      "institutions",
+      {
+        user: "institution-buyer",
+        body: {
+          organization: "Instituição de teste",
+          course: "Graduação",
+          message:
+            "Desejamos disponibilizar estes materiais para uma turma de estudantes.",
+          seats: 3,
+          product_ids: [commercialId],
+        },
+      },
+      200,
+    );
+    const proposal = (
+      await (await call("institutions", { user: "institution-buyer" })).json()
+    ).requests[0];
+    await expectStatus(
+      "institution-admin",
+      { user: "outsider", body: { id: proposal.id, price: 0 } },
+      403,
+    );
+    await expectStatus(
+      "institution-admin",
+      {
+        user: "admin",
+        body: {
+          id: proposal.id,
+          price: 0,
+          seats: 3,
+          scope:
+            "Três licenças nominativas para avaliação interna, sem direito de redistribuir os arquivos.",
+          expires: new Date(Date.now() + 86400000).toISOString(),
+        },
+      },
+      200,
+    );
+    const quoted = (
+      await (await call("institutions", { user: "institution-buyer" })).json()
+    ).requests[0];
+    assert(!("quoted_items" in quoted));
+    assert(!("file_key" in quoted.items[0]));
+    checks++;
+    await expectStatus(
+      "institutions",
+      {
+        user: "institution-buyer",
+        body: { action: "accept", id: proposal.id, accepted: true },
+      },
+      200,
+    );
+    await expectStatus(
+      "institution-admin",
+      { user: "admin", body: { id: proposal.id, price: 1 } },
+      409,
+    );
+    await expectStatus(
+      "institution-checkout",
+      { user: "other-buyer", body: { id: proposal.id } },
+      409,
+    );
+    await expectStatus(
+      "institution-checkout",
+      { user: "institution-buyer", body: { id: proposal.id } },
+      200,
+    );
+    assert.equal(
+      db
+        .prepare("SELECT seats FROM order_licenses WHERE order_id=?")
+        .get(proposal.id).seats,
+      3,
+    );
+    assert.equal(
+      db
+        .prepare("SELECT file_key FROM order_items WHERE order_id=?")
+        .get(proposal.id).file_key,
+      commercialKey,
+    );
+    checks++;
+    await expectStatus(
+      "partner-settings",
+      { user: "outsider", body: { enabled: true } },
+      403,
+    );
+    await expectStatus(
+      "partner-settings",
+      {
+        user: "admin",
+        body: {
+          enabled: true,
+          discount_percent: 10,
+          student_reward: 500,
+          min_total: 2000,
+          affiliate_rate: 1000,
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "partners",
+      { user: "affiliate-owner", body: { kind: "affiliate", accepted: true } },
+      200,
+    );
+    let partner = (
+      await (await call("partners", { user: "affiliate-owner" })).json()
+    ).account;
+    assert.equal(partner.status, "pending");
+    checks++;
+    await expectStatus(
+      "partners-admin",
+      {
+        user: "admin",
+        body: { user_id: "affiliate-owner", status: "approved" },
+      },
+      200,
+    );
+    await expectStatus(
+      "referral-quote",
+      {
+        user: "affiliate-owner",
+        body: { ids: [commercialId], code: partner.code },
+      },
+      400,
+    );
+    const referralQuote = await (
+      await expectStatus(
+        "referral-quote",
+        {
+          user: "referred-buyer",
+          body: { ids: [commercialId], seats: 1, code: partner.code },
+        },
+        200,
+      )
+    ).json();
+    assert.equal(referralQuote.discount, 300);
+    assert.equal(referralQuote.total, 2700);
+    checks++;
+    let newSessionCalls = 0;
+    globalThis.fetch = async (url, opts) => {
+      assert(String(url).endsWith("/checkout/sessions"));
+      newSessionCalls++;
+      assert.equal(
+        opts.body.get("line_items[0][price_data][unit_amount]"),
+        "2700",
+      );
+      return Response.json({
+        id: "cs_referral_workflow",
+        url: "https://checkout.stripe.test/referral",
+      });
+    };
+    const referred = await (
+      await expectStatus(
+        "checkout",
+        {
+          user: "referred-buyer",
+          body: {
+            ids: [commercialId],
+            referral_code: partner.code,
+            accepted: true,
+            request_id: crypto.randomUUID(),
+          },
+        },
+        200,
+      )
+    ).json();
+    assert.equal(newSessionCalls, 1);
+    assert.equal(
+      db.prepare("SELECT total FROM orders WHERE id=?").get(referred.order)
+        .total,
+      2700,
+    );
+    checks++;
+    await expectStatus(
+      "referral-quote",
+      {
+        user: "referred-buyer",
+        body: { ids: [commercialId], code: partner.code },
+      },
+      409,
+    );
+    const referredItem = db
+        .prepare("SELECT id FROM order_items WHERE order_id=?")
+        .get(referred.order),
+      oldDate = new Date(Date.now() - 20 * 86400000).toISOString();
+    db.prepare("UPDATE orders SET status='paid' WHERE id=?").run(
+      referred.order,
+    );
+    db.prepare("UPDATE referral_sales SET created=? WHERE order_id=?").run(
+      oldDate,
+      referred.order,
+    );
+    db.prepare(
+      "INSERT INTO settlements(id,order_id,author_id,gross,fee,rate,platform,author_net,refunded_gross,refunded_author,release_at,created) VALUES(?,?,'admin',2700,170,0,2530,0,0,0,?,?)",
+    ).run(referredItem.id, referred.order, oldDate, oldDate);
+    const released = await (
+      await call("partners", { user: "affiliate-owner" })
+    ).json();
+    assert.equal(released.ledger.balances[0].available, 253);
+    checks++;
+    await expectStatus(
+      "partner-payout",
+      {
+        user: "admin",
+        body: {
+          user_id: "affiliate-owner",
+          amount: 254,
+          reference: "external-overdraw-test",
+        },
+      },
+      409,
+    );
+    await expectStatus(
+      "partner-payout",
+      {
+        user: "admin",
+        body: {
+          user_id: "affiliate-owner",
+          amount: 253,
+          reference: "external-transfer-test",
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "partner-payout",
+      {
+        user: "admin",
+        body: {
+          user_id: "affiliate-owner",
+          amount: 1,
+          reference: "external-transfer-test-2",
+        },
+      },
+      409,
+    );
+    db.prepare(
+      "UPDATE settlements SET refunded_gross=2700 WHERE order_id=?",
+    ).run(referred.order);
+    const reversed = await (
+      await call("partners", { user: "affiliate-owner" })
+    ).json();
+    assert.equal(reversed.ledger.balances[0].available, -253);
+    checks++;
+    // Payment recovery always checks original provider state and preserves frozen price.
+    db.prepare(
+      "UPDATE orders SET status='failed',session_id='cs_retry_old',checkout_url='https://checkout.stripe.test/old' WHERE id=?",
+    ).run(referred.order);
+    let renewalCalls = 0;
+    globalThis.fetch = async (url, opts) => {
+      if (String(url).endsWith("/cs_retry_old"))
+        return Response.json({
+          id: "cs_retry_old",
+          status: "expired",
+          amount_total: 2700,
+          metadata: { order_id: referred.order },
+        });
+      assert(String(url).endsWith("/checkout/sessions"));
+      renewalCalls++;
+      assert.equal(
+        opts.body.get("line_items[0][price_data][unit_amount]"),
+        "2700",
+      );
+      assert.equal(
+        opts.headers["Idempotency-Key"],
+        "retry:" + referred.order + ":cs_retry_old",
+      );
+      return Response.json({
+        id: "cs_retry_new",
+        url: "https://checkout.stripe.test/new",
+      });
+    };
+    await expectStatus(
+      "order-retry",
+      { user: "pdf-outsider", body: { id: referred.order } },
+      404,
+    );
+    await expectStatus(
+      "order-retry",
+      { user: "referred-buyer", body: { id: referred.order } },
+      200,
+    );
+    assert.equal(renewalCalls, 1);
+    checks++;
+    globalThis.fetch = async () =>
+      Response.json({
+        id: "cs_retry_new",
+        status: "complete",
+        amount_total: 2700,
+        metadata: { order_id: referred.order },
+      });
+    await expectStatus(
+      "order-retry",
+      { user: "referred-buyer", body: { id: referred.order } },
+      409,
+    );
+    globalThis.fetch = originalFetch;
+    // Paid license holders search the exact contracted PDF rather than a public catalog replacement.
+    const indexed = await (
+      await expectStatus(
+        "study-assistant",
+        {
+          user: "institution-buyer",
+          body: {
+            product_id: commercialId,
+            question: "Como fazer revisao ativa com feedback?",
+          },
+        },
+        200,
+      )
+    ).json();
+    assert(
+      indexed.sources.some((s) => s.page === 1 && s.text.includes("feedback")),
+    );
+    checks++;
+    assert([...objects.keys()].some((k) => k.startsWith("study-index/")));
+    checks++;
+    await expectStatus(
+      "review-schedule",
+      {
+        user: "admin",
+        body: {
+          product_id: commercialId,
+          next_review: "2020-01-01",
+          pause_sales: true,
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "checkout",
+      {
+        user: "new-review-buyer",
+        body: { ids: [commercialId], accepted: true },
+      },
+      409,
+    );
+    await expectStatus(
+      "download/" + commercialId,
+      { user: "institution-buyer" },
+      200,
+    );
+    await expectStatus(
+      "review-queue",
+      {
+        user: "admin",
+        body: {
+          product_id: commercialId,
+          next_review: new Date(Date.now() + 86400000)
+            .toISOString()
+            .slice(0, 10),
+          notes: "Conferidas as fontes e a estrutura do material de teste.",
+          checked: true,
+        },
+      },
+      200,
+    );
+    await call("me", { user: "student-referrer" });
+    await call("me", { user: "student-referral-buyer" });
+    await expectStatus(
+      "partners",
+      { user: "student-referrer", body: { kind: "student", accepted: true } },
+      200,
+    );
+    const studentPartner = (
+      await (await call("partners", { user: "student-referrer" })).json()
+    ).account;
+    assert.equal(studentPartner.status, "approved");
+    checks++;
+    db.prepare(
+      "INSERT INTO orders(id,user_id,status,total,created) VALUES('student-reward-fixture','student-referral-buyer','paid',2700,?)",
+    ).run(oldDate);
+    db.prepare(
+      "INSERT INTO order_items(id,order_id,product_id,author_id,commission_bps,owned,policy_version,price,title,file_key,file_name,content) VALUES('student-reward-item','student-reward-fixture',?,'admin',0,1,'test',2700,'Material original',?,'original.pdf','')",
+    ).run(commercialId, commercialKey);
+    db.prepare(
+      "INSERT INTO referral_sales(order_id,referrer_id,buyer_id,code,kind,rate_bps,reward_cents,min_total,discount,created) VALUES('student-reward-fixture','student-referrer','student-referral-buyer',?,'student',0,500,2000,300,?)",
+    ).run(studentPartner.code, oldDate);
+    db.prepare(
+      "INSERT INTO settlements(id,order_id,author_id,gross,fee,rate,platform,author_net,refunded_gross,refunded_author,release_at,created) VALUES('student-reward-item','student-reward-fixture','admin',2700,170,0,2530,0,0,0,?,?)",
+    ).run(oldDate, oldDate);
+    const studentLedger = (
+      await (await call("partners", { user: "student-referrer" })).json()
+    ).ledger;
+    const rewardCode = studentLedger.sales[0].reward.code;
+    assert.equal(studentLedger.sales[0].reward.status, "issued");
+    checks++;
+    await expectStatus(
+      "coupon-quote",
+      { user: "other-buyer", body: { ids: [commercialId], code: rewardCode } },
+      403,
+    );
+    const personalReward = await (
+      await expectStatus(
+        "coupon-quote",
+        {
+          user: "student-referrer",
+          body: { ids: [commercialId], code: rewardCode },
+        },
+        200,
+      )
+    ).json();
+    assert.equal(personalReward.discount, 500);
+    checks++;
+    db.prepare(
+      "UPDATE settlements SET refunded_gross=2700 WHERE order_id=?",
+    ).run("student-reward-fixture");
+    await call("partners", { user: "student-referrer" });
+    assert.equal(
+      db.prepare("SELECT active FROM coupons WHERE code=?").get(rewardCode)
+        .active,
+      0,
+    );
+    checks++;
+
+    // External document tracking never claims to have issued or signed anything by itself.
+    await expectStatus(
+      "documents",
+      {
+        user: "outsider",
+        body: { kind: "invoice", order_id: "copy-pdf-fixture" },
+      },
+      403,
+    );
+    await expectStatus(
+      "documents",
+      {
+        user: "alice",
+        body: { kind: "invoice", order_id: "copy-pdf-fixture" },
+      },
+      200,
+    );
+    const fiscal = (await (await call("documents", { user: "alice" })).json())
+      .documents[0];
+    assert.equal(fiscal.status, "requested");
+    checks++;
+    await expectStatus(
+      "documents-admin",
+      {
+        user: "admin",
+        body: {
+          id: fiscal.id,
+          status: "issued",
+          reference: "NF-test-001",
+          url: "javascript:alert(1)",
+          verified: true,
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "documents-admin",
+      {
+        user: "admin",
+        body: {
+          id: fiscal.id,
+          status: "issued",
+          reference: "NF-test-001",
+          url: "https://fiscal.example/document/1",
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "documents-admin",
+      {
+        user: "admin",
+        body: {
+          id: fiscal.id,
+          status: "issued",
+          reference: "NF-test-001",
+          url: "https://fiscal.example/document/1",
+          verified: true,
+        },
+      },
+      200,
+    );
+    assert.equal(
+      (await (await call("documents", { user: "outsider" })).json()).documents
+        .length,
+      0,
+    );
+    checks++;
+    await expectStatus(
+      "tickets",
+      {
+        user: "student-referrer",
+        body: {
+          subject: "Dúvida sobre outro pedido",
+          message: "Preciso confirmar a entrega deste material.",
+          order_id: "copy-pdf-fixture",
+        },
+      },
+      403,
+    );
+    await expectStatus(
+      "tickets",
+      {
+        user: "alice",
+        body: {
+          subject: "Dúvida sobre meu pedido",
+          message: "Preciso de informações sobre o arquivo que adquiri.",
+          order_id: "copy-pdf-fixture",
+        },
+      },
+      200,
+    );
+    const ownTicket = (await (await call("tickets", { user: "alice" })).json())
+      .tickets[0];
+    await expectStatus(
+      "support-thread?id=" + ownTicket.id,
+      { user: "other-buyer" },
+      404,
+    );
+    await expectStatus(
+      "admin",
+      {
+        user: "admin",
+        body: {
+          action: "ticket",
+          id: ownTicket.id,
+          response: "O arquivo está disponível na sua biblioteca.",
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "support-thread",
+      {
+        user: "alice",
+        body: {
+          id: ownTicket.id,
+          message: "Obrigado. Preciso ainda conferir a versão do documento.",
+        },
+      },
+      200,
+    );
+    const thread = await (
+      await call("support-thread?id=" + ownTicket.id, { user: "alice" })
+    ).json();
+    assert.equal(thread.ticket.status, "open");
+    assert.equal(thread.ticket.order_id, "copy-pdf-fixture");
+    assert.equal(thread.messages.length, 2);
+    checks++;
+    const exported = await (
+      await expectStatus("privacy-export", { user: "affiliate-owner" }, 200)
+    ).json();
+    assert.equal(exported.partner_account.length, 1);
+    assert(
+      exported.affiliate_payouts.every((x) => x.user_id === "affiliate-owner"),
+    );
     checks++;
   }
   console.log(

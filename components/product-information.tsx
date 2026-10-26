@@ -3,6 +3,12 @@ import { useEffect, useState } from "react";
 import { callApi } from "./commerce-panels";
 import { money, type Product } from "@/lib/catalog";
 type Info = {
+  review_schedule?: {
+    next_review: string;
+    last_review: string;
+    reviewer: string;
+    pause_sales: number;
+  } | null;
   extra: {
     prerequisites?: string;
     audience?: string;
@@ -83,6 +89,27 @@ export function ProductInformation({ product: p }: { product: Product }) {
                 </article>
               ))}
             </details>
+          )}
+          {data.review_schedule && (
+            <div className="notice">
+              <h4>Revisão editorial programada</h4>
+              <p>
+                Próxima revisão:{" "}
+                {data.review_schedule.next_review
+                  .split("-")
+                  .reverse()
+                  .join("/")}
+              </p>
+              {data.review_schedule.last_review && (
+                <p>
+                  Última conferência:{" "}
+                  {new Date(
+                    data.review_schedule.last_review,
+                  ).toLocaleDateString("pt-BR")}{" "}
+                  · {data.review_schedule.reviewer}
+                </p>
+              )}
+            </div>
           )}
           <h4>Dúvidas respondidas</h4>
           {data.questions.map((q) => (

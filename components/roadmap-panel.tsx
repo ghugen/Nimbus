@@ -1,4 +1,5 @@
 "use client";
+import {DeliveryChecklist} from "./delivery-checklist";
 import { useEffect, useState } from "react";
 import { callApi } from "./commerce-panels";
 type Item = {
@@ -31,6 +32,7 @@ export function RoadmapPanel() {
   }, []);
   return (
     <section>
+      <DeliveryChecklist/>
       <span className="eyebrow">EVOLUÇÃO COM EVIDÊNCIAS</span>
       <h2>As 100 melhorias da Nimbus</h2>
       <p className="notice">

@@ -4,7 +4,7 @@ Plataforma web responsiva para descoberta e comercialização de materiais acad�
 
 ## Estado da implementação
 
-A aplicação possui frontend e backend conectados a banco D1 e arquivos privados R2. O catálogo inicial contém **exemplos identificados como demonstrativos**, que não podem ser vendidos, e um guia gratuito original em texto para experimentar o fluxo completo. Não há números de vendas, avaliações ou credenciais inventadas.
+A aplicação possui frontend e backend conectados a banco D1 e arquivos privados R2. O catálogo inicial contém **exemplos identificados como demonstrativos**, que não podem ser vendidos, e quatro guias gratuitos originais em PDF, além da experiência `/experimentar` com leitura, cartões, questionário e busca de trechos. Não há números de vendas, avaliações ou credenciais inventadas.
 
 **Não está pronta para receber pagamentos reais sem configuração.** É necessário cadastrar a conta Stripe, validar o webhook em ambiente de testes, configurar administradores, publicar PDFs comerciais autorizados, completar as informações do responsável pela operação e definir atendimento, cancelamentos e condições com autores. O compartilhamento atual da hospedagem é preservado; chamadas externas de webhook exigem um endpoint acessível ao provedor e uma abertura de acesso planejada.
 
@@ -12,7 +12,13 @@ A aplicação possui frontend e backend conectados a banco D1 e arquivos privado
 
 O acompanhamento detalhado está em **Administração → Gestão → 100 melhorias** (`/#admin/melhorias`) e em [docs/ROADMAP_100.md](docs/ROADMAP_100.md). Cada item tem evidência técnica separada do planejamento editável. Os estados não representam certificação ou homologação externa.
 
-Nesta entrega: **66 implementados, 24 parciais, 9 dependentes de ativação externa e 1 pendente**. O item pendente é o aplicativo nativo, etapa anteriormente adiada. A marcação "parcial" registra limitações concretas, incluindo cobrança ainda não homologada, backup dos objetos, revisão assistiva e agendamento sem visitas.
+Nesta entrega: **67 implementados, 23 parciais, 9 dependentes de ativação externa e 1 pendente**. O item pendente é o aplicativo nativo, etapa anteriormente adiada. A marcação "parcial" registra limitações concretas, incluindo cobrança ainda não homologada, backup dos objetos, revisão assistiva e agendamento sem visitas.
+
+## Entrega consolidada
+
+A lista de 66 recursos solicitados está em [docs/ESCOPO_CONSOLIDADO.md](docs/ESCOPO_CONSOLIDADO.md) e no início de Administração → 100 melhorias. Inclui estado técnico e limitações de cada recurso. O plano de pagamentos e os bloqueios de homologação estão em [docs/STRIPE_INTEGRATION_PLAN.md](docs/STRIPE_INTEGRATION_PLAN.md).
+
+Novas áreas: mural moderado, indicações e afiliados, propostas institucionais com arquivos/preços congelados, fila de contratos/documentos fiscais externos, revisão editorial periódica, conferência de permissões, histórico de atendimento e códigos opacos em cópias de PDF compatíveis. Nenhuma assinatura eletrônica, emissão fiscal, repasse automático ou integração externa é apresentada como ativa sem a configuração correspondente.
 
 ## Recursos implementados
 
@@ -42,7 +48,7 @@ Nesta entrega: **66 implementados, 24 parciais, 9 dependentes de ativação exte
 - Reembolsos têm solicitação e aprovação no painel, mas só funcionam com o provedor configurado e precisam de homologação real.
 - E-mail transacional por Resend e acesso por Clerk estão preparados; dependem de chaves, remetente verificado e testes externos.
 - Proteção DRM: nenhum sistema impede totalmente a redistribuição após um download autorizado.
-- Assinaturas e cupons estão implementados. Recorrência exige homologação; afiliados e recomendação por IA não estão implementados.
+- Assinaturas e cupons estão implementados. Recorrência exige homologação; indicações/afiliados estão implementados e começam desativados. O assistente busca trechos do material; explicações por IA exigem configuração, autorização do autor e consentimento do estudante.
 - Revisão científica, jurídica ou editorial automática dos arquivos.
 - Teste de cobrança com conta Stripe real: os testes automatizados simulam o provedor.
 

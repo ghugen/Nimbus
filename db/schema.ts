@@ -92,6 +92,7 @@ export const study = sqliteTable("study", {
   progress: integer("progress").notNull().default(0),
 });
 export const tickets = sqliteTable("tickets", {
+  orderId: text("order_id"),
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
   subject: text("subject").notNull(),
@@ -582,4 +583,154 @@ export const profileVerifications = sqliteTable("profile_verifications", {
   evidence: text("evidence").notNull().default(""),
   reviewer: text("reviewer").notNull(),
   updated: text("updated").notNull(),
+});
+
+export const demandIdeas = sqliteTable("demand_ideas", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull(),
+  course: text("course").notNull(),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  status: text("status").notNull().default("pending"),
+  response: text("response").notNull().default(""),
+  productId: text("product_id"),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+export const demandVotes = sqliteTable("demand_votes", {
+  id: text("id").primaryKey(),
+  ideaId: text("idea_id").notNull(),
+  userId: text("user_id").notNull(),
+  created: text("created").notNull(),
+});
+export const growthSettings = sqliteTable("growth_settings", {
+  id: text("id").primaryKey(),
+  value: text("value").notNull(),
+  updated: text("updated").notNull(),
+});
+export const partnerAccounts = sqliteTable("partner_accounts", {
+  userId: text("user_id").primaryKey(),
+  code: text("code").unique().notNull(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull().default("pending"),
+  rateBps: integer("rate_bps").notNull().default(0),
+  terms: text("terms").notNull(),
+  accepted: text("accepted").notNull(),
+  updated: text("updated").notNull(),
+});
+export const referralSales = sqliteTable("referral_sales", {
+  discount: integer("discount").notNull().default(0),
+  orderId: text("order_id").primaryKey(),
+  referrerId: text("referrer_id").notNull(),
+  buyerId: text("buyer_id").unique().notNull(),
+  code: text("code").notNull(),
+  kind: text("kind").notNull(),
+  rateBps: integer("rate_bps").notNull(),
+  rewardCents: integer("reward_cents").notNull().default(0),
+  minTotal: integer("min_total").notNull(),
+  created: text("created").notNull(),
+});
+export const affiliatePayouts = sqliteTable("affiliate_payouts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  amount: integer("amount").notNull(),
+  reference: text("reference").unique().notNull(),
+  actor: text("actor").notNull(),
+  created: text("created").notNull(),
+});
+export const referralRewards = sqliteTable("referral_rewards", {
+  orderId: text("order_id").primaryKey(),
+  code: text("code").unique().notNull(),
+  status: text("status").notNull(),
+  created: text("created").notNull(),
+});
+export const institutionRequests = sqliteTable("institution_requests", {
+  quotedItems: text("quoted_items").notNull().default("[]"),
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  organization: text("organization").notNull(),
+  course: text("course").notNull(),
+  message: text("message").notNull(),
+  seats: integer("seats").notNull(),
+  productIds: text("product_ids").notNull(),
+  status: text("status").notNull().default("requested"),
+  price: integer("price"),
+  scope: text("scope").notNull().default(""),
+  expires: text("expires").notNull().default(""),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+export const productPolicies = sqliteTable("product_policies", {
+  productId: text("product_id").primaryKey(),
+  watermark: integer("watermark").notNull().default(1),
+  aiEnabled: integer("ai_enabled").notNull().default(0),
+  updated: text("updated").notNull(),
+});
+export const reviewSchedules = sqliteTable("review_schedules", {
+  productId: text("product_id").primaryKey(),
+  nextReview: text("next_review").notNull(),
+  pauseSales: integer("pause_sales").notNull().default(0),
+  lastReview: text("last_review").notNull().default(""),
+  reviewer: text("reviewer").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  updated: text("updated").notNull(),
+});
+export const downloadCopies = sqliteTable("download_copies", {
+  id: text("id").primaryKey(),
+  copyCode: text("copy_code").unique().notNull(),
+  userId: text("user_id").notNull(),
+  orderId: text("order_id").notNull(),
+  productId: text("product_id").notNull(),
+  fileKey: text("file_key").notNull(),
+  created: text("created").notNull(),
+});
+export const tutorUsage = sqliteTable("tutor_usage", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  day: text("day").notNull(),
+  count: integer("count").notNull().default(0),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+});
+export const launchTasks = sqliteTable("launch_tasks", {
+  id: text("id").primaryKey(),
+  productId: text("product_id"),
+  status: text("status").notNull().default("planned"),
+  notes: text("notes").notNull().default(""),
+  updated: text("updated").notNull(),
+});
+
+export const couponRestrictions = sqliteTable("coupon_restrictions", {
+  code: text("code").primaryKey(),
+  userId: text("user_id").notNull(),
+});
+export const affiliateCredits = sqliteTable("affiliate_credits", {
+  orderId: text("order_id").primaryKey(),
+  userId: text("user_id").notNull(),
+  amount: integer("amount").notNull(),
+  available: integer("available").notNull(),
+  updated: text("updated").notNull(),
+});
+
+export const operationDocuments = sqliteTable("operation_documents", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  kind: text("kind").notNull(),
+  orderId: text("order_id"),
+  reference: text("reference").notNull().default(""),
+  status: text("status").notNull().default("requested"),
+  url: text("url").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+
+export const ticketMessages = sqliteTable("ticket_messages", {
+  id: text("id").primaryKey(),
+  ticketId: text("ticket_id").notNull(),
+  userId: text("user_id").notNull(),
+  kind: text("kind").notNull(),
+  message: text("message").notNull(),
+  created: text("created").notNull(),
 });

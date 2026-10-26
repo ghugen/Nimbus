@@ -1,0 +1,1 @@
+ALTER TABLE `institution_requests` ADD `quoted_items` text DEFAULT '[]' NOT NULL;

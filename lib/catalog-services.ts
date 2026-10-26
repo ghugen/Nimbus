@@ -95,7 +95,7 @@ export async function entitlement(
     .first<Record<string, unknown>>();
   if (child) return child;
   return env.DB.prepare(
-    "SELECT json_extract(a.value,'$.product_id') product_id,json_extract(a.value,'$.title') title,json_extract(a.value,'$.file_key') file_key,json_extract(a.value,'$.file_name') file_name,json_extract(a.value,'$.content') content FROM subscriptions s,json_each(s.assets) a WHERE s.user_id=? AND s.status='active' AND s.expires>? AND json_extract(a.value,'$.product_id')=? LIMIT 1",
+    "SELECT 'subscription:'||s.id order_id,json_extract(a.value,'$.product_id') product_id,json_extract(a.value,'$.title') title,json_extract(a.value,'$.file_key') file_key,json_extract(a.value,'$.file_name') file_name,json_extract(a.value,'$.content') content FROM subscriptions s,json_each(s.assets) a WHERE s.user_id=? AND s.status='active' AND s.expires>? AND json_extract(a.value,'$.product_id')=? LIMIT 1",
   )
     .bind(userId, new Date().toISOString(), productId)
     .first<Record<string, unknown>>();

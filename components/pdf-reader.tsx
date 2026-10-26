@@ -7,9 +7,11 @@ type Annotation = { id: string; page: number; kind: string; text: string };
 export function PdfReader({
   productId,
   publicSource,
+  jump,
 }: {
   productId: string;
   publicSource?: string;
+  jump?: {page:number;key:number};
 }) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null),
     [page, setPage] = useState(1),
@@ -28,6 +30,7 @@ export function PdfReader({
     box = useRef<HTMLDivElement>(null),
     searchRun = useRef(0);
   const privateMode = !publicSource;
+  useEffect(()=>{if(doc&&jump)setPage(Math.max(1,Math.min(doc.numPages,jump.page)));},[jump,doc]);
   async function refreshNotes() {
     if (privateMode)
       setAnnotations(

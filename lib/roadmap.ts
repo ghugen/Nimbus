@@ -115,7 +115,7 @@ const categories = [
 export type ImplementationState =
   "implemented" | "partial" | "external" | "pending";
 const external: Record<number, string> = {
-  1: "Configure STRIPE_SECRET_KEY e STRIPE_WEBHOOK_SECRET na hospedagem.",
+  1: "Chave de teste configurada na hospedagem; faltam segredo do webhook, endpoint acessível e validação de entrega antes de STRIPE_WEBHOOK_READY=1.",
   2: "As simulações existem; a validação real exige credenciais, webhook acessível e execução em ambiente de teste do provedor.",
   3: "Configure as chaves Clerk e valide a verificação de e-mail.",
   4: "Configure Resend e um remetente com domínio verificado.",
@@ -473,14 +473,14 @@ export const implementationEvidence: Record<
       "Pedidos e retornos de pagamento exibem estados; os estados novos de serviço e assinatura ainda precisam de revisão integral de linguagem.",
   },
   "44": {
-    state: "partial",
+    state: "implemented",
     evidence:
-      "Retoma a URL de sessão existente. Sessões expiradas exigem novo pedido; renovação automática ainda não implementada.",
+      "Consulta a sessão original no provedor e renova somente após expiração, com preço congelado, chave idempotente e revalidação de cupom e lotação. Fluxo coberto por simulações; exige homologação externa.",
   },
   "55": {
     state: "partial",
     evidence:
-      "Extensão, assinatura básica, tamanho e hash conferidos. Contagem de páginas e conteúdo ainda exigem conferência editorial.",
+      "Extensão, assinatura, tamanho e hash conferidos; PDFs são abertos estruturalmente e têm páginas contadas. Conteúdo, antivírus e autoria ainda exigem revisão ou serviço externo.",
   },
   "60": {
     state: "partial",

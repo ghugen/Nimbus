@@ -1,4 +1,5 @@
 "use client";
+import {ProductOperations} from "./editorial-operations";
 import { LearningAuthor } from "./learning-experience";
 import {
   PublicationPreview,
@@ -455,6 +456,7 @@ export function AuthorStudio({
                       }}
                     />
                     <PublicationSchedule id={p.id} />
+                    <ProductOperations id={p.id}/>
                     <CoverTemplates
                       id={p.id}
                       title={p.title}

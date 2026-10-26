@@ -1,3 +1,6 @@
+import { STRIPE_API_VERSION, CHECKOUT_INTEGRATION } from "./stripe-config";
+import { requirePayments } from "./payment-readiness";
+import { retryOrder } from "./payment-retry";
 import {
   body,
   clean,
@@ -512,6 +515,7 @@ export async function serviceRoutes(
     return json({ ok: true });
   }
   if (path === "service-checkout" && method === "POST") {
+    requirePayments(e);
     if (!e.STRIPE_SECRET_KEY)
       fail("Pagamentos de serviços ainda não foram ativados.", 503);
     const kind = b!.kind === "quote" ? "quote" : "booking",
@@ -526,13 +530,19 @@ export async function serviceRoutes(
       )[0];
     if (
       !r ||
-      !["requested", "pending", "accepted"].includes(String(r.status)) ||
+      !["requested", "pending", "accepted", "failed"].includes(
+        String(r.status),
+      ) ||
       Number(r.price) <= 0
     )
       fail("Reserva ou orçamento indisponível.", 409);
     if (kind === "quote" && r.status !== "accepted")
       fail("Aceite o orçamento antes de pagar.");
-    if (r.checkout_url && r.session_id) return json({ url: r.checkout_url });
+    if (r.checkout_url && r.session_id) {
+      const order = (await rows(e, "SELECT * FROM orders WHERE id=?", r.id))[0];
+      if (!order) fail("Pedido não encontrado.", 404);
+      return json(await retryOrder(e, u, order, url.origin));
+    }
     await e.DB.batch([
       e.DB.prepare(
         "INSERT OR IGNORE INTO orders(id,user_id,status,total,created) VALUES(?,?,?,?,?)",
@@ -559,10 +569,12 @@ export async function serviceRoutes(
         headers: {
           Authorization: "Bearer " + e.STRIPE_SECRET_KEY,
           "Content-Type": "application/x-www-form-urlencoded",
+          "Stripe-Version": STRIPE_API_VERSION,
           "Idempotency-Key": "nimbus-service:" + r.id,
         },
         body: new URLSearchParams({
           mode: "payment",
+          integration_identifier: CHECKOUT_INTEGRATION,
           "line_items[0][price_data][currency]": "brl",
           "line_items[0][price_data][unit_amount]": String(r.price),
           "line_items[0][price_data][product_data][name]": String(r.title),

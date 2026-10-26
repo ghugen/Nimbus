@@ -1,3 +1,4 @@
+import { retryOrder } from "./payment-retry";
 import { reconcile } from "./finance";
 import {
   body,
@@ -267,16 +268,8 @@ export async function operationsPlus(
         )
       )[0];
     if (!order) fail("Pedido não encontrado.", 404);
-    if (path === "order-retry") {
-      if (order.user_id !== u.id)
-        fail("Somente o comprador pode retomar o pagamento.", 403);
-      if (order.status !== "pending" || !order.checkout_url)
-        fail(
-          "Este pagamento não pode ser retomado. Revise o carrinho para iniciar outro pedido.",
-          409,
-        );
-      return json({ url: order.checkout_url });
-    }
+    if (path === "order-retry") {if(method!=="POST")fail("Use o botão Retomar pagamento.",405);return json(await retryOrder(e,u,order,url.origin));}
+
     const items = await rows(
         e,
         "SELECT product_id,title,price FROM order_items WHERE order_id=?",
@@ -286,8 +279,8 @@ export async function operationsPlus(
         (
           await rows(
             e,
-            "SELECT code,discount FROM coupon_uses WHERE order_id=?",
-            id,
+            "SELECT code,discount FROM coupon_uses WHERE order_id=? UNION ALL SELECT code,discount FROM referral_sales WHERE order_id=?",
+            id,id,
           )
         )[0] || null;
     if (path === "order-detail")

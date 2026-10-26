@@ -1,4 +1,5 @@
 "use client";
+import { SupportThread } from "@/components/support-thread";
 import { ManagementPanel } from "@/components/management-panel";
 import {
   ReviewModeration,
@@ -31,6 +32,24 @@ import {
   PreferredTopics,
 } from "@/components/catalog-tools";
 import { searchMatches } from "@/lib/search";
+import {
+  DocumentPanel,
+  IntegrationReadiness,
+  InvoiceRequest,
+} from "@/components/document-panels";
+import {
+  DemandBoard,
+  PartnerPage,
+  PartnerAdmin,
+  InstitutionPanel,
+  LaunchPanel,
+} from "@/components/market-panels";
+import {
+  ReviewQueue,
+  PermissionReview,
+} from "@/components/editorial-operations";
+import { StudyAssistant } from "@/components/study-assistant";
+import { ContextHelp } from "@/components/context-help";
 import { PdfReader } from "@/components/pdf-reader";
 import {
   LibraryFilters,
@@ -195,6 +214,8 @@ const initials = (name: string) =>
     .join("")
     .toUpperCase();
 type ApiResponse = {
+  discount?: number;
+  total?: number;
   error: string;
   products: Product[];
   payments: boolean;
@@ -246,6 +267,17 @@ const emptyForm = {
   commercial_accepted: false,
 };
 export default function Nimbus() {
+  const [readerJump, setReaderJump] = useState({ page: 1, key: 0 });
+  const [referral, setReferral] = useState<{
+    code: string;
+    discount: number;
+    total: number;
+  } | null>(null);
+  const [referralCode, setReferralCode] = useState("");
+  useEffect(() => {
+    const code = new URLSearchParams(location.search).get("indicacao");
+    if (code) setReferralCode(code.slice(0, 40));
+  }, []);
   const [authorTab, setAuthorTab] = useState("resumo");
   const [clarityRating, setClarityRating] = useState(5),
     [presentationRating, setPresentationRating] = useState(5);
@@ -307,6 +339,9 @@ export default function Nimbus() {
     [rating, setRating] = useState(5),
     [comment, setComment] = useState(""),
     [payments, setPayments] = useState(false);
+  useEffect(() => {
+    setReferral(null);
+  }, [cart, seats]);
   const organization = useLibraryOrganization(!!user && view === "biblioteca");
   function go(next: string) {
     window.location.hash = next;
@@ -728,6 +763,7 @@ export default function Nimbus() {
               ["catalogo", "Explorar materiais"],
               ["colecoes", "Coleções"],
               ["gratuitos", "Gratuitos"],
+              ["mural", "Mural"],
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -862,6 +898,30 @@ export default function Nimbus() {
         </div>
       )}
       <main>
+        {user &&
+          [
+            "biblioteca",
+            "pedidos",
+            "perfil",
+            "documentos",
+            "parcerias",
+            "instituicoes",
+          ].includes(view) && (
+            <nav
+              className="container studio-actions"
+              aria-label="Serviços da conta"
+            >
+              <button className="text-link" onClick={() => go("documentos")}>
+                Meus documentos
+              </button>
+              <button className="text-link" onClick={() => go("parcerias")}>
+                Indicações e afiliados
+              </button>
+              <button className="text-link" onClick={() => go("instituicoes")}>
+                Para instituições
+              </button>
+            </nav>
+          )}
         {view === "conta" && !user && (
           <section className="container page-section">
             {loaded ? (
@@ -1596,7 +1656,27 @@ export default function Nimbus() {
           ) : (
             signedOut("Área da equipe")
           ))}
-        {view === "gratuitos" && <FreeDownloads />}
+        {view === "documentos" &&
+          (user ? <DocumentPanel /> : signedOut("Acompanhe seus documentos"))}
+        {view === "mural" && <DemandBoard signedIn={!!user} />}
+        {view === "parcerias" &&
+          (user ? <PartnerPage /> : signedOut("Participe das indicações"))}
+        {view === "instituicoes" &&
+          (user ? (
+            <InstitutionPanel />
+          ) : (
+            signedOut("Solicite uma proposta institucional")
+          ))}
+        {view === "gratuitos" && (
+          <>
+            <div className="container">
+              <a className="btn primary" href="/experimentar">
+                Experimentar PDF, cartões e questões grátis ↗
+              </a>
+            </div>
+            <FreeDownloads />
+          </>
+        )}
         {view === "colecoes" && <CollectionsPanel />}
         {view === "interesses" && (
           <section className="container page-section">
@@ -1665,6 +1745,7 @@ export default function Nimbus() {
                 </div>
                 <aside className="panel checkout">
                   <h2>Resumo do pedido</h2>
+                  <ContextHelp topic="payment" />
                   <div>
                     <span>Materiais ({cartItems.length})</span>
                     <strong>
@@ -1737,8 +1818,66 @@ export default function Nimbus() {
                     <CouponInput
                       ids={cart}
                       seats={seats}
-                      onApplied={setCoupon}
+                      onApplied={(value) => {
+                        setCoupon(value);
+                        setReferral(null);
+                      }}
                     />
+                  )}
+                  {user && (
+                    <details className="referral-input">
+                      <summary>Tenho um código de indicação</summary>
+                      <label>
+                        Código
+                        <input
+                          value={referralCode}
+                          maxLength={40}
+                          onChange={(e) => {
+                            setReferralCode(e.target.value);
+                            setReferral(null);
+                          }}
+                        />
+                      </label>
+                      <button
+                        className="btn secondary small"
+                        disabled={busy || !referralCode}
+                        onClick={() =>
+                          action(async () => {
+                            const d = await api("referral-quote", {
+                              ids: cart,
+                              seats,
+                              code: referralCode,
+                            });
+                            setReferral({
+                              code: referralCode,
+                              discount: Number(d.discount),
+                              total: Number(d.total),
+                            });
+                            setCoupon(null);
+                          })
+                        }
+                      >
+                        Aplicar indicação
+                      </button>
+                      {referral && (
+                        <button
+                          className="text-link"
+                          onClick={() => setReferral(null)}
+                        >
+                          Remover indicação
+                        </button>
+                      )}
+                      <p>
+                        Benefícios sujeitos às regras do programa. Não acumula
+                        com cupom.
+                      </p>
+                    </details>
+                  )}
+                  {referral && (
+                    <div>
+                      <span>Indicação · {referral.code}</span>
+                      <strong>−{money(referral.discount)}</strong>
+                    </div>
                   )}
                   {coupon && (
                     <div>
@@ -1751,6 +1890,7 @@ export default function Nimbus() {
                     <strong>
                       {money(
                         coupon?.total ??
+                          referral?.total ??
                           cartItems.reduce((s, p) => s + p.price, 0) * seats,
                       )}
                     </strong>
@@ -1799,7 +1939,7 @@ export default function Nimbus() {
                             "nimbus-checkout:" +
                             cart.toSorted().join(",") +
                             ":" +
-                            (coupon?.code || "") +
+                            (coupon?.code || referral?.code || "") +
                             ":" +
                             seats +
                             ":" +
@@ -1816,6 +1956,7 @@ export default function Nimbus() {
                             gift_email:
                               purchaseMode === "gift" ? giftEmail : undefined,
                             coupon: coupon?.code,
+                            referral_code: referral?.code,
                             ids: cart,
                             accepted,
                             request_id,
@@ -2091,6 +2232,9 @@ export default function Nimbus() {
                         <strong>{money(o.total)}</strong>
                       </div>
                       <OrderTools order={o} />
+                      {o.status === "paid" && o.total > 0 && (
+                        <InvoiceRequest orderId={o.id} />
+                      )}
                       {o.status === "paid" && (
                         <button
                           className="text-link"
@@ -2240,6 +2384,13 @@ export default function Nimbus() {
                     )}
                     {adminTab === "relatórios" && <ManagementPanel />}
                     {adminTab === "melhorias" && <RoadmapPanel />}
+                    {adminTab === "documentos" && <DocumentPanel admin />}
+                    {adminTab === "conexoes" && <IntegrationReadiness />}
+                    {adminTab === "lancamento" && <LaunchPanel />}
+                    {adminTab === "parcerias" && <PartnerAdmin />}
+                    {adminTab === "instituicoes" && <InstitutionPanel admin />}
+                    {adminTab === "mural" && <DemandBoard signedIn admin />}
+                    {adminTab === "revisoes" && <ReviewQueue />}
                     {adminTab === "tarefas" && <OperationsTasks />}
                     {adminTab === "reembolsos" && <RefundAdmin />}
                     {adminTab === "perguntas" && (
@@ -2251,7 +2402,12 @@ export default function Nimbus() {
                     {adminTab === "alertas" && (
                       <ModerationPanel kind="events" />
                     )}
-                    {adminTab === "equipe" && <StaffRolesPanel />}
+                    {adminTab === "equipe" && (
+                      <>
+                        <StaffRolesPanel />
+                        <PermissionReview />
+                      </>
+                    )}
                     {adminTab === "planos" && <SubscriptionAdmin />}
                     {adminTab === "serviços" && <ServicesAdmin />}
                     {adminTab === "avaliações" && <ReviewModeration admin />}
@@ -2511,6 +2667,7 @@ export default function Nimbus() {
                               {t.email} · {date(t.created)}
                             </small>
                             <p className="pre-line">{t.message}</p>
+                            <SupportThread id={t.id} readOnly />
                             {t.status === "open" ? (
                               <>
                                 <label>
@@ -2673,6 +2830,14 @@ export default function Nimbus() {
                     >
                       <h2>Abra uma solicitação</h2>
                       <label>
+                        Pedido relacionado (opcional)
+                        <input
+                          name="order_id"
+                          maxLength={100}
+                          placeholder="Código completo do pedido"
+                        />
+                      </label>
+                      <label>
                         Assunto
                         <input
                           name="subject"
@@ -2701,6 +2866,7 @@ export default function Nimbus() {
                           <Status value={t.status} />
                         </div>
                         <small>{date(t.created)}</small>
+                        <SupportThread id={t.id} />
                         <p className="pre-line">{t.message}</p>
                         {t.response && (
                           <p className="notice pre-line">
@@ -2835,6 +3001,15 @@ export default function Nimbus() {
                 </p>
                 <h2>Pagamentos e arquivos</h2>
                 <p>
+                  A Nimbus registra códigos individuais de cópia, indicações e
+                  solicitações institucionais para operar os recursos
+                  contratados. A busca de trechos usa o material autorizado.
+                  Explicações por IA, quando habilitadas, exigem autorização do
+                  autor e seu consentimento para enviar pergunta e trechos ao
+                  provedor; perguntas e respostas não são armazenadas pela
+                  Nimbus.
+                </p>
+                <p>
                   Quando ativado, o checkout envia à Stripe o e-mail e os itens
                   do pedido. Os arquivos são armazenados em área protegida e sua
                   entrega depende de autorização no servidor.
@@ -2967,6 +3142,13 @@ export default function Nimbus() {
             <button onClick={() => go("correcoes")}>Minhas correções</button>
             <button onClick={() => go("assinaturas")}>Planos e clubes</button>
             <button onClick={() => go("servicos")}>Encontros e serviços</button>
+            <button onClick={() => go("parcerias")}>
+              Indicações e afiliados
+            </button>
+            <button onClick={() => go("instituicoes")}>
+              Para instituições
+            </button>
+            <a href="/experimentar">Experimente grátis</a>
             <button onClick={() => go("biblioteca")}>Minha biblioteca</button>
           </div>
           <div>
@@ -3309,7 +3491,14 @@ export default function Nimbus() {
             {(reader.file_name?.toLowerCase().endsWith(".pdf") ||
               products.find((p) => p.id === reader.product_id)
                 ?.public_download) && (
-              <PdfReader productId={reader.product_id} />
+              <>
+                <PdfReader productId={reader.product_id} jump={readerJump} />
+                <StudyAssistant
+                  productId={reader.product_id}
+                  onPage={(page) => setReaderJump({ page, key: Date.now() })}
+                />
+                <ContextHelp topic="reader" />
+              </>
             )}
             <StudyOrganization
               productId={reader.product_id}

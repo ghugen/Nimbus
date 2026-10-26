@@ -4,6 +4,10 @@ export type FeatureRuntime = StoreRuntime &
   NotificationRuntime & {
     STRIPE_SECRET_KEY?: string;
     STRIPE_WEBHOOK_SECRET?: string;
+    STRIPE_WEBHOOK_READY?: string;
+    STRIPE_SUBSCRIPTIONS_READY?: string;
+    AI_GATEWAY_API_KEY?: string;
+    AI_GATEWAY_MODEL?: string;
   };
 export type FeatureUser = {
   id: string;

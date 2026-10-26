@@ -1,3 +1,19 @@
+import { STRIPE_API_VERSION, CHECKOUT_INTEGRATION } from "@/lib/stripe-config";
+import { supportThread } from "@/lib/support-thread";
+import { operationDocuments } from "@/lib/operation-documents";
+import { paymentsReady, requirePayments } from "@/lib/payment-readiness";
+import { studyAssistant } from "@/lib/study-assistant";
+import {
+  editorialOperations,
+  assertSaleAvailable,
+} from "@/lib/editorial-operations";
+import { copyPdf, inspectPdf } from "@/lib/pdf-tools";
+import { institutional } from "@/lib/institutional";
+import {
+  marketGrowth,
+  prepareReferral,
+  referralStatement,
+} from "@/lib/market-growth";
 import { publicationNotices } from "@/lib/publication-notices";
 import { management } from "@/lib/management";
 import { freeGuides } from "@/lib/free-guides";
@@ -52,6 +68,7 @@ type Runtime = {
   BUCKET: R2Bucket;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_WEBHOOK_READY?: string;
   ADMIN_EMAILS?: string;
 };
 const runtime = () => env as unknown as Runtime;
@@ -67,6 +84,8 @@ function fail(message: string, status = 400): never {
   throw Object.assign(new Error(message), { status });
 }
 type Body = {
+  order_id?: string;
+  referral_code?: string;
   seats?: number;
   gift_email?: string;
   coupon?: string;
@@ -370,6 +389,20 @@ async function moderateProduct(u: Awaited<ReturnType<typeof auth>>, b: Body) {
   await log(u.id, `product.${b.status}`, p.id);
 }
 async function respondTicket(u: Awaited<ReturnType<typeof auth>>, b: Body) {
+  if (clean(b.response, 5000).length < 5)
+    fail("Escreva uma resposta com pelo menos cinco caracteres.");
+  const ticket = (
+    await all("SELECT id FROM tickets WHERE id=?", clean(b.id, 100))
+  )[0];
+  if (!ticket) fail("Chamado não encontrado.", 404);
+  await run(
+    "INSERT INTO ticket_messages(id,ticket_id,user_id,kind,message,created) VALUES(?,?,?,'support',?,?)",
+    uid(),
+    clean(b.id, 100),
+    u.id,
+    clean(b.response, 5000),
+    now(),
+  );
   await run(
     "UPDATE tickets SET response=?,status=? WHERE id=?",
     clean(b.response, 5000),
@@ -407,6 +440,12 @@ async function dispatch(req: Request) {
       fail("Origem da solicitação inválida.", 403);
   }
   for (const handler of [
+    supportThread,
+    operationDocuments,
+    studyAssistant,
+    editorialOperations,
+    marketGrowth,
+    institutional,
     management,
     learning,
     discovery,
@@ -559,6 +598,51 @@ async function dispatch(req: Request) {
         "SELECT order_id,email,created FROM license_invites WHERE user_id=?",
         u.id,
       ),
+      support_messages: await all(
+        "SELECT m.kind,m.message,m.created FROM ticket_messages m JOIN tickets t ON t.id=m.ticket_id WHERE t.user_id=?",
+        u.id,
+      ),
+      documents: await all(
+        "SELECT id,kind,order_id,reference,status,url,notes,created,updated FROM operation_documents WHERE user_id=?",
+        u.id,
+      ),
+      demand_ideas: await all(
+        "SELECT * FROM demand_ideas WHERE user_id=?",
+        u.id,
+      ),
+      demand_votes: await all(
+        "SELECT * FROM demand_votes WHERE user_id=?",
+        u.id,
+      ),
+      partner_account: await all(
+        "SELECT * FROM partner_accounts WHERE user_id=?",
+        u.id,
+      ),
+      referral_sales: await all(
+        "SELECT order_id,code,kind,discount,created FROM referral_sales WHERE buyer_id=? OR referrer_id=?",
+        u.id,
+        u.id,
+      ),
+      affiliate_credits: await all(
+        "SELECT * FROM affiliate_credits WHERE user_id=?",
+        u.id,
+      ),
+      affiliate_payouts: await all(
+        "SELECT * FROM affiliate_payouts WHERE user_id=?",
+        u.id,
+      ),
+      institutional_requests: await all(
+        "SELECT id,organization,course,message,seats,status,price,scope,expires,created,updated FROM institution_requests WHERE user_id=?",
+        u.id,
+      ),
+      download_copies: await all(
+        "SELECT copy_code,order_id,product_id,created FROM download_copies WHERE user_id=?",
+        u.id,
+      ),
+      assistant_usage: await all(
+        "SELECT day,count,input_tokens,output_tokens FROM tutor_usage WHERE user_id=?",
+        u.id,
+      ),
       sent_licenses: await all(
         "SELECT li.order_id,li.email,li.created FROM license_invites li JOIN orders o ON o.id=li.order_id WHERE o.user_id=?",
         u.id,
@@ -666,7 +750,7 @@ async function dispatch(req: Request) {
           preview_count: JSON.parse(preview_keys || "[]").length,
         }),
       );
-    return json({ products, payments: !!runtime().STRIPE_SECRET_KEY });
+    return json({ products, payments: paymentsReady(runtime()) });
   }
   if (path[0] === "me" && method === "GET") {
     const u = await who(req);
@@ -792,6 +876,7 @@ async function dispatch(req: Request) {
       );
       bundleMap.set(p.id, children);
       for (const child of children) {
+        await assertSaleAvailable(runtime(), child.id);
         if (ids.includes(child.id) || included.has(child.id))
           fail("Há materiais repetidos entre os kits e o carrinho.", 409);
         included.add(child.id);
@@ -800,6 +885,7 @@ async function dispatch(req: Request) {
       }
     }
     for (const p of selected) {
+      await assertSaleAvailable(runtime(), p.id);
       if (!giftEmail && (await purchased(u.id, p.id)))
         fail(`Você já possui: ${p.title}`, 409);
       if (
@@ -839,16 +925,29 @@ async function dispatch(req: Request) {
           u.id,
         )
       : null;
+    if (b.referral_code && b.coupon)
+      fail("Escolha cupom ou indicação; os descontos não se acumulam.");
+    const referral = b.referral_code
+      ? await prepareReferral(
+          runtime(),
+          u,
+          clean(b.referral_code, 40),
+          selected.map((p) => ({
+            id: p.id,
+            price: p.price * seats,
+            owned: policies.get(p.id)!.owned,
+          })),
+        )
+      : null;
     const priced = selected.map((p) => ({
       ...p,
-      price: quote?.amounts.get(p.id) ?? p.price * seats,
+      price:
+        quote?.amounts.get(p.id) ??
+        referral?.amounts.get(p.id) ??
+        p.price * seats,
     }));
     const total = priced.reduce((s, p) => s + p.price, 0);
-    if (total > 0 && !runtime().STRIPE_SECRET_KEY)
-      fail(
-        "Os pagamentos ainda não foram ativados. Você pode experimentar o guia gratuito.",
-        503,
-      );
+    if (total > 0) requirePayments(runtime());
     const id = requestHash;
     await run(
       "INSERT OR IGNORE INTO legal_acceptances(id,user_id,kind,version,details,created) VALUES(?,?,?,?,?,?)",
@@ -860,13 +959,15 @@ async function dispatch(req: Request) {
         ids,
         total,
         coupon: quote?.code,
-        discount: quote?.discount,
+        referral: referral?.account.code,
+        discount: quote?.discount ?? referral?.discount,
         seats,
         giftEmail,
       }),
       now(),
     );
     await DB.batch([
+      ...(referral ? [referralStatement(runtime(), u, id, referral)] : []),
       DB.prepare(
         "INSERT INTO orders (id,user_id,status,total,created) VALUES(?,?,?,?,?)",
       ).bind(id, u.id, total === 0 ? "paid" : "pending", total, now()),
@@ -927,6 +1028,11 @@ async function dispatch(req: Request) {
           ]
         : []),
     ]).catch((err) => {
+      if (referral)
+        fail(
+          "Indicação já vinculada ou indisponível. Atualize os pedidos.",
+          409,
+        );
       if (quote)
         fail(
           "Cupom indisponível, já utilizado ou com limite atingido. Atualize o carrinho.",
@@ -941,6 +1047,7 @@ async function dispatch(req: Request) {
     }
     const form = new URLSearchParams({
       mode: "payment",
+      integration_identifier: CHECKOUT_INTEGRATION,
       success_url: `${url.origin}/?payment=success&order=${id}#${giftEmail || seats > 1 ? "licencas" : "biblioteca"}`,
       cancel_url: `${url.origin}/?payment=cancelled#carrinho`,
       "metadata[order_id]": id,
@@ -960,6 +1067,7 @@ async function dispatch(req: Request) {
         headers: {
           Authorization: `Bearer ${runtime().STRIPE_SECRET_KEY}`,
           "Content-Type": "application/x-www-form-urlencoded",
+          "Stripe-Version": STRIPE_API_VERSION,
           "Idempotency-Key": id,
         },
         body: form,
@@ -1183,8 +1291,20 @@ async function dispatch(req: Request) {
     if (item.file_key) {
       const file = await BUCKET.get(String(item.file_key));
       if (!file) fail("Arquivo indisponível. Contate o suporte.", 404);
-      return new Response(file.body, {
+      const copy = await copyPdf(
+        runtime(),
+        u,
+        path[1],
+        String(item.file_key),
+        String(item.file_name || "material.pdf"),
+        file.body,
+        item,
+      );
+      return new Response(copy.body as BodyInit, {
         headers: {
+          "X-Nimbus-Watermark": copy.marked
+            ? "applied"
+            : copy.reason || "not_required",
           "Content-Type": fileMime(String(item.file_name || "material.pdf")),
           "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(String(item.file_name || "material.pdf"))}`,
           "Cache-Control": "private, no-store",
@@ -1276,13 +1396,27 @@ async function dispatch(req: Request) {
       const b = await body(req);
       if (clean(b.subject).length < 3 || clean(b.message).length < 10)
         fail("Descreva o assunto e a solicitação.");
+      const orderId = clean(b.order_id, 100);
+      if (
+        orderId &&
+        !(
+          await all(
+            "SELECT id FROM orders WHERE id=? AND user_id=?",
+            orderId,
+            u.id,
+          )
+        ).length
+      )
+        fail("Pedido não encontrado em sua conta.", 403);
+      await limitRate(runtime(), u.id, "new-ticket", 10);
       await run(
-        "INSERT INTO tickets(id,user_id,subject,message,created) VALUES(?,?,?,?,?)",
+        "INSERT INTO tickets(id,user_id,subject,message,created,order_id) VALUES(?,?,?,?,?,?)",
         uid(),
         u.id,
         clean(b.subject, 150),
         clean(b.message, 5000),
         now(),
+        orderId || null,
       );
       return json({ ok: true });
     }
@@ -1381,6 +1515,15 @@ async function dispatch(req: Request) {
       )
         fail("Inclua descrição e prévia mais completas.");
       const profile = (await all("SELECT name FROM users WHERE id=?", u.id))[0];
+      if (existing?.file_name?.toLowerCase().endsWith(".pdf")) {
+        const check = (
+          await all("SELECT result FROM upload_checks WHERE product_id=?", id)
+        )[0];
+        try {
+          const pages = JSON.parse(String(check?.result || "{}")).pages;
+          if (Number.isInteger(pages) && pages > 0) b.pages = pages;
+        } catch {}
+      }
       if (existing)
         await run(
           "UPDATE products SET title=?,description=?,category=?,subject=?,format=?,price=?,pages=?,preview=?,status=? WHERE id=?",
@@ -1492,6 +1635,9 @@ async function dispatch(req: Request) {
       new TextDecoder().decode(buffer.slice(0, 5)) !== "%PDF-"
     )
       fail("Arquivo PDF inválido.");
+    const pdfInfo = file.name.toLowerCase().endsWith(".pdf")
+      ? await inspectPdf(new Uint8Array(buffer))
+      : null;
     const ext = file.name.split(".").pop()?.toUpperCase() || "";
     const bytes = new Uint8Array(buffer);
     const textHeader = new TextDecoder().decode(buffer.slice(0, 1024));
@@ -1537,7 +1683,13 @@ async function dispatch(req: Request) {
       hash,
       file.size,
       ext,
-      matches.length ? "duplicate_detected" : "signature_checked",
+      JSON.stringify({
+        signature: true,
+        duplicate: matches.length > 0,
+        pages: pdfInfo?.pages ?? null,
+        declared_pages: product.pages,
+        mismatch: !!pdfInfo && pdfInfo.pages !== product.pages,
+      }),
       now(),
     );
     if (matches.length)
@@ -1560,6 +1712,8 @@ async function dispatch(req: Request) {
       now(),
       id,
     );
+    if (pdfInfo)
+      await run("UPDATE products SET pages=? WHERE id=?", pdfInfo.pages, id);
     const revision =
       clean(form.get("notes"), 4000) || "Arquivo enviado para revisão.";
     await run(

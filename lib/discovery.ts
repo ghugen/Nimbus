@@ -106,6 +106,7 @@ export async function discovery(
         id,
       ),
       components: products.filter((x) => ids.includes(x.id)).map(publicDTO),
+      review_schedule:(await rows(e,"SELECT next_review,last_review,reviewer,pause_sales FROM review_schedules WHERE product_id=?",id))[0]||null,
       questions: await rows(
         e,
         "SELECT id,question,answer,created FROM product_questions WHERE product_id=? AND status='published' AND answer!='' ORDER BY created DESC",

@@ -1,3 +1,6 @@
+import { STRIPE_API_VERSION, CHECKOUT_INTEGRATION } from "./stripe-config";
+import { requirePayments } from "./payment-readiness";
+import { assertSaleAvailable } from "./editorial-operations";
 import { hasPackage } from "./learning-products";
 import { publicProducts } from "./catalog-services";
 import {
@@ -190,6 +193,12 @@ export async function subscriptionRoutes(
     let amount = Number(old?.amount || 0),
       interval = String(old?.interval || "month");
     if (status === "active") {
+      requirePayments(e);
+      if (e.STRIPE_SUBSCRIPTIONS_READY !== "1")
+        fail(
+          "Assinaturas aguardam homologação do ciclo de cobrança, cancelamento e eventos de risco.",
+          503,
+        );
       if (!e.STRIPE_SECRET_KEY)
         fail("Configure pagamentos antes de ativar um plano.", 503);
       if (!/^price_[A-Za-z0-9]+$/.test(priceId) || !ids.length)
@@ -241,6 +250,9 @@ export async function subscriptionRoutes(
       ),
     });
   if (path === "subscription-checkout" && method === "POST") {
+    requirePayments(e);
+    if (e.STRIPE_SUBSCRIPTIONS_READY !== "1")
+      fail("Assinaturas aguardam homologação do ciclo completo.", 503);
     if (!e.STRIPE_SECRET_KEY)
       fail("Assinaturas ainda não foram ativadas.", 503);
     if (b!.accepted !== true) fail("Confirme as condições da assinatura.");
@@ -278,6 +290,7 @@ export async function subscriptionRoutes(
         );
       if (p.file_key && !(await e.BUCKET.head(p.file_key)))
         fail("Um arquivo do plano está indisponível.", 409);
+      await assertSaleAvailable(e, p.id);
       assets.push({
         product_id: p.id,
         title: p.title,
@@ -305,10 +318,12 @@ export async function subscriptionRoutes(
         headers: {
           Authorization: "Bearer " + e.STRIPE_SECRET_KEY,
           "Content-Type": "application/x-www-form-urlencoded",
+          "Stripe-Version": STRIPE_API_VERSION,
           "Idempotency-Key": "nimbus-subscription:" + id,
         },
         body: new URLSearchParams({
           mode: "subscription",
+          integration_identifier: CHECKOUT_INTEGRATION,
           "line_items[0][price]": String(plan.stripe_price_id),
           "line_items[0][quantity]": "1",
           customer_email: u.email,
@@ -362,6 +377,7 @@ export async function subscriptionRoutes(
       headers: {
         Authorization: "Bearer " + e.STRIPE_SECRET_KEY,
         "Content-Type": "application/x-www-form-urlencoded",
+        "Stripe-Version": STRIPE_API_VERSION,
       },
       body: new URLSearchParams({
         customer: String(s.customer_id),

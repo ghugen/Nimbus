@@ -1,3 +1,4 @@
+import { copyPdf } from "./pdf-tools";
 import { hasPackage } from "./learning-products";
 import type { RichProduct, StoreRuntime } from "./catalog-services";
 import {
@@ -297,12 +298,14 @@ export async function extension(
         path[1],
       )
     )[0];
-    if (!v || !(await entitlement(env, u.id, v.product_id)))
-      fail("Acesso negado.", 403);
+    const access=v?await entitlement(env,u.id,v.product_id):null;
+    if(!v||!access)fail("Acesso negado.",403);
     const file = await env.BUCKET.get(v.file_key);
     if (!file) fail("Arquivo indisponível.", 404);
-    return new Response(file.body, {
+    const copy=await copyPdf(env,u,v.product_id,v.file_key,v.file_name,file.body,access);
+    return new Response(copy.body as BodyInit, {
       headers: {
+        "X-Nimbus-Watermark":copy.marked?"applied":copy.reason||"not_required",
         "Content-Type": fileMime(v.file_name),
         "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(v.file_name)}`,
         "Cache-Control": "private, no-store",
