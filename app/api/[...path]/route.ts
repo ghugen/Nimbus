@@ -1,3 +1,4 @@
+import { editorialEvolution, assertSalesOpen } from "@/lib/editorial-evolution";
 import {
   studentExperience,
   updateTermStatements,
@@ -321,6 +322,11 @@ async function moderateProduct(u: Awaited<ReturnType<typeof auth>>, b: Body) {
   );
   if (b.status === "published" && !scheduled)
     await run(
+      "UPDATE editorial_tools SET published=draft WHERE product_id=?",
+      p.id,
+    );
+  if (b.status === "published" && !scheduled)
+    await run(
       "UPDATE learning_packages SET published_cards=cards,published_questions=questions,published_lessons=lessons WHERE product_id=?",
       p.id,
     );
@@ -444,6 +450,7 @@ async function dispatch(req: Request) {
       fail("Origem da solicitação inválida.", 403);
   }
   for (const handler of [
+    editorialEvolution,
     studentExperience,
     supportThread,
     operationDocuments,
@@ -964,7 +971,10 @@ async function dispatch(req: Request) {
         p.price * seats,
     }));
     const total = priced.reduce((s, p) => s + p.price, 0);
-    if (total > 0) requirePayments(runtime());
+    if (total > 0) {
+      await assertSalesOpen(runtime());
+      requirePayments(runtime());
+    }
     const id = requestHash;
     await run(
       "INSERT OR IGNORE INTO legal_acceptances(id,user_id,kind,version,details,created) VALUES(?,?,?,?,?,?)",

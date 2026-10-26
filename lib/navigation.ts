@@ -56,6 +56,7 @@ export const adminGroups = [
       ["equipe", "Equipe e permissões"],
       ["melhorias", "100 melhorias"],
       ["tarefas", "Tarefas"],
+      ["curadoria", "Calendário e continuidade"],
       ["relatórios", "Relatórios e recuperação"],
       ["alertas", "Alertas"],
       ["operação", "Operação"],
@@ -131,6 +132,7 @@ export function safeReturnTarget(value: string | null) {
     [
       "inicio",
       "comecar",
+      "trilhas",
       "catalogo",
       "colecoes",
       "gratuitos",

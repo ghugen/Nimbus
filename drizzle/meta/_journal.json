@@ -162,6 +162,13 @@
       "when": 1793016168414,
       "tag": "0022_student_experience",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1793018279066,
+      "tag": "0023_editorial_evolution",
+      "breakpoints": true
     }
   ]
 }

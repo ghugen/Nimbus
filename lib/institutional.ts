@@ -1,3 +1,4 @@
+import { assertSalesOpen } from "./editorial-evolution";
 import { updateTermStatements, updateTerms } from "./student-experience";
 import { STRIPE_API_VERSION, CHECKOUT_INTEGRATION } from "./stripe-config";
 import { requirePayments } from "./payment-readiness";
@@ -296,7 +297,10 @@ export async function institutional(
   }
   if (String(r.expires) <= now())
     fail("A validade da proposta encerrou. Solicite uma nova proposta.", 409);
-  if (Number(r.price) > 0) requirePayments(e);
+  if (Number(r.price) > 0) {
+    await assertSalesOpen(e);
+    requirePayments(e);
+  }
   const items = JSON.parse(String(r.quoted_items)) as QuoteItem[];
   await verifyItems(
     e,

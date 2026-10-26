@@ -1,4 +1,12 @@
 "use client";
+import { SalesNotice } from "@/components/editorial-evolution";
+import {
+  EditorialTools,
+  VersionComparison,
+  StudyPaths,
+  MaterialErrata,
+} from "@/components/editorial-evolution";
+import { EvolutionAdmin } from "@/components/evolution-admin";
 import {
   GettingStarted,
   MaterialConfidence,
@@ -757,6 +765,7 @@ export default function Nimbus() {
   }
   return (
     <>
+      <SalesNotice />
       <div className="announcement">
         <span>
           <Sparkles size={13} /> Um novo espaço para suas próximas descobertas.
@@ -787,6 +796,7 @@ export default function Nimbus() {
               ["comecar", "Comece por aqui"],
               ["catalogo", "Explorar materiais"],
               ["colecoes", "Coleções"],
+              ["trilhas", "Trilhas"],
               ["gratuitos", "Gratuitos"],
               ["mural", "Mural"],
             ].map(([id, label]) => (
@@ -967,6 +977,7 @@ export default function Nimbus() {
             </div>
           </div>
         )}
+        {view === "trilhas" && <StudyPaths />}
         {view === "comecar" && <GettingStarted />}
         {view === "inicio" && (
           <>
@@ -2405,6 +2416,7 @@ export default function Nimbus() {
                 <div className="admin-shell">
                   <AdminNavigation active={adminTab} onNavigate={go} />
                   <div className="admin-content">
+                    {adminTab === "curadoria" && <EvolutionAdmin />}
                     {adminTab === "procura" && <DemandInsights />}
                     {adminTab === "feedback" && <FeedbackReport />}
                     {adminTab === "prontidao" && <LaunchReadiness />}
@@ -3188,6 +3200,7 @@ export default function Nimbus() {
             <a href="/experimentar">Experimente grátis</a>
             <a href="/comecar">Comece por aqui</a>
             <a href="/avaliar">Avaliar a experiência</a>
+            <a href="/situacao">Situação do serviço</a>
             <button onClick={() => go("biblioteca")}>Minha biblioteca</button>
           </div>
           <div>
@@ -3548,6 +3561,9 @@ export default function Nimbus() {
               }}
             />
             <VersionList productId={reader.product_id} />
+            <VersionComparison id={reader.product_id} />
+            <EditorialTools id={reader.product_id} />
+            <MaterialErrata id={reader.product_id} />
             <CommunityPanel kind="issues" productId={reader.product_id} />
             {reader.file_name ? (
               <div className="notice">

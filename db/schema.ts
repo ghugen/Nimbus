@@ -773,3 +773,23 @@ export const orderUpdateTerms = sqliteTable("order_update_terms", {
   terms: text("terms").notNull(),
   created: text("created").notNull(),
 });
+
+export const editorialTools = sqliteTable("editorial_tools", {
+  productId: text("product_id").primaryKey(),
+  draft: text("draft").notNull().default("{}"),
+  published: text("published").notNull().default("{}"),
+  updated: text("updated").notNull(),
+});
+export const evolutionRecords = sqliteTable("evolution_records", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  course: text("course").notNull().default(""),
+  semester: text("semester").notNull().default(""),
+  productIds: text("product_ids").notNull().default("[]"),
+  due: text("due").notNull().default(""),
+  status: text("status").notNull().default("draft"),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});

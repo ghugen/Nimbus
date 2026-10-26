@@ -3359,6 +3359,329 @@ try {
     checks++;
   }
 
+  {
+    const id = "experience-free-fixture";
+    await expectStatus(
+      "sales-maintenance",
+      {
+        user: "policy-student",
+        body: { paused: true, message: "Pausa indevida de vendas." },
+      },
+      403,
+    );
+    await expectStatus(
+      "sales-maintenance",
+      {
+        user: "admin",
+        body: {
+          paused: true,
+          message: "Conferência operacional em andamento.",
+        },
+      },
+      200,
+    );
+    assert.equal(
+      (await (await call("service-status", { user: null })).json()).sales
+        .paused,
+      true,
+    );
+    checks++;
+    await expectStatus(
+      "subscription-checkout",
+      { user: "policy-student", body: { accepted: true, plan_id: "none" } },
+      503,
+    );
+    await expectStatus("download/" + id, { user: "policy-student" }, 200);
+    await expectStatus(
+      "sales-maintenance",
+      {
+        user: "admin",
+        body: { paused: false, message: "Conferência operacional concluída." },
+      },
+      200,
+    );
+    await expectStatus(
+      "editorial-tools-edit",
+      {
+        user: "policy-student",
+        body: {
+          product_id: id,
+          glossary: [],
+          atlas: [],
+          rights: true,
+          deidentified: true,
+        },
+      },
+      403,
+    );
+    const glossary = [
+      {
+        term: "Revisão ativa",
+        definition: "Responder uma pergunta antes de conferir a fonte.",
+      },
+    ];
+    await expectStatus(
+      "editorial-tools-edit",
+      {
+        user: "admin",
+        body: {
+          product_id: id,
+          glossary,
+          atlas: [],
+          rights: false,
+          deidentified: true,
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "editorial-tools-edit",
+      {
+        user: "admin",
+        body: {
+          product_id: id,
+          glossary,
+          atlas: [],
+          rights: true,
+          deidentified: true,
+        },
+      },
+      200,
+    );
+    assert.equal(
+      (
+        await (
+          await call("editorial-tools?id=" + id, { user: "policy-student" })
+        ).json()
+      ).tools.glossary,
+      undefined,
+    );
+    checks++;
+    await expectStatus(
+      "admin",
+      {
+        user: "admin",
+        body: { action: "product", id, status: "published", reviewed: true },
+      },
+      200,
+    );
+    assert.equal(
+      (
+        await (
+          await call("editorial-tools?id=" + id, { user: "policy-student" })
+        ).json()
+      ).tools.glossary[0].term,
+      "Revisão ativa",
+    );
+    checks++;
+    await expectStatus(
+      "editorial-tools?id=" + id,
+      { user: "policy-outsider" },
+      403,
+    );
+    await expectStatus(
+      "evolution-admin",
+      { user: "policy-student", body: { kind: "incident" } },
+      403,
+    );
+    const path = await (
+      await expectStatus(
+        "evolution-admin",
+        {
+          user: "admin",
+          body: {
+            kind: "path",
+            title: "Métodos de estudo — primeiro semestre",
+            body: "Sequência sugerida de leitura e prática com os materiais originais.",
+            course: "Graduação",
+            semester: "1º semestre",
+            product_ids: [id],
+            status: "published",
+          },
+        },
+        200,
+      )
+    ).json();
+    const publicPaths = await (
+      await call("study-paths", { user: null })
+    ).json();
+    assert.equal(
+      publicPaths.paths.find((p) => p.id === path.id).items[0].id,
+      id,
+    );
+    assert(!("file_key" in publicPaths.paths[0].items[0]));
+    checks++;
+    await expectStatus(
+      "evolution-admin",
+      {
+        user: "admin",
+        body: {
+          id: path.id,
+          kind: "incident",
+          title: "Tipo não pode mudar",
+          body: "Tentativa inválida de alterar o tipo do registro existente.",
+          product_ids: [],
+          status: "published",
+        },
+      },
+      409,
+    );
+    const correction = await (
+      await expectStatus(
+        "evolution-admin",
+        {
+          user: "admin",
+          body: {
+            kind: "errata",
+            title: "Correção do exemplo de revisão",
+            body: "Na primeira página, considere a pergunta e confira a resposta na fonte antes de marcar acerto.",
+            product_ids: [id],
+            status: "published",
+          },
+        },
+        200,
+      )
+    ).json();
+    assert.equal(
+      (await (await call("material-errata?id=" + id, { user: null })).json())
+        .errata.length,
+      1,
+    );
+    assert(
+      db
+        .prepare(
+          "SELECT COUNT(*) n FROM notifications WHERE user_id='policy-student' AND title LIKE 'Correção importante:%'",
+        )
+        .get().n > 0,
+    );
+    checks++;
+    await expectStatus(
+      "evolution-admin",
+      {
+        user: "admin",
+        body: {
+          id: correction.id,
+          kind: "errata",
+          title: "Alteração posterior proibida",
+          body: "Uma correção publicada deve manter o histórico do que foi comunicado.",
+          product_ids: [id],
+          status: "draft",
+        },
+      },
+      409,
+    );
+    await expectStatus(
+      "evolution-admin",
+      {
+        user: "admin",
+        body: {
+          kind: "incident",
+          title: "Teste de comunicado de serviço",
+          body: "Foi identificada uma dificuldade de acesso e a equipe está conferindo o serviço.",
+          product_ids: [],
+          status: "published",
+        },
+      },
+      200,
+    );
+    assert.equal(
+      (await (await call("service-status", { user: null })).json()).incidents
+        .length,
+      1,
+    );
+    checks++;
+    await expectStatus("recurring-questions", { user: "policy-student" }, 403);
+    await expectStatus("recurring-questions", { user: "admin" }, 200);
+    await expectStatus(
+      "version-compare?id=" + id + "&a=wrong&b=other",
+      { user: "policy-outsider" },
+      403,
+    );
+    await expectStatus(
+      "version-compare?id=" + id + "&a=wrong&b=other",
+      { user: "policy-student" },
+      400,
+    );
+    objects.set(
+      "compare-before.pdf",
+      await fixturePdf("Texto original antes da revisao."),
+    );
+    objects.set(
+      "compare-after.pdf",
+      await fixturePdf("Texto corrigido depois da revisao."),
+    );
+    for (const [key, seq] of [
+      ["compare-before", 1],
+      ["compare-after", 2],
+    ])
+      db.prepare(
+        "INSERT INTO product_versions(id,product_id,sequence,file_key,file_name,notes,status,created,released) VALUES(?,?,?,?,?,'Comparação de teste','published',?,?)",
+      ).run(
+        key,
+        id,
+        seq,
+        key + ".pdf",
+        "original.pdf",
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
+    const comparison = await (
+      await expectStatus(
+        "version-compare?id=" + id + "&a=compare-before&b=compare-after",
+        { user: "policy-student" },
+        200,
+      )
+    ).json();
+    assert.equal(comparison.total, 1);
+    assert(comparison.changes[0].before.includes("original"));
+    assert(comparison.changes[0].after.includes("corrigido"));
+    checks++;
+    db.prepare("UPDATE products SET preview_keys=? WHERE id=?").run(
+      JSON.stringify(["atlas-original.png"]),
+      id,
+    );
+    objects.set("atlas-original.png", new Uint8Array([137, 80, 78, 71]));
+    const atlas = [
+      {
+        image: 0,
+        caption: "Imagem original com descrição anatômica para estudo.",
+        source: "Arquivo autoral autorizado",
+        question: "Que estrutura foi marcada?",
+        answer: "Confira a legenda numerada.",
+        points: [{ x: 50, y: 50, label: "Estrutura de interesse" }],
+      },
+    ];
+    await expectStatus(
+      "editorial-tools-edit",
+      {
+        user: "admin",
+        body: {
+          product_id: id,
+          glossary,
+          atlas,
+          rights: true,
+          deidentified: true,
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "admin",
+      {
+        user: "admin",
+        body: { action: "product", id, status: "published", reviewed: true },
+      },
+      200,
+    );
+    const publishedAtlas = (
+      await (
+        await call("editorial-tools?id=" + id, { user: "policy-student" })
+      ).json()
+    ).tools.atlas;
+    assert.equal(publishedAtlas[0].points[0].x, 50);
+    checks++;
+  }
+
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );

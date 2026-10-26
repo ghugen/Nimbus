@@ -1,3 +1,4 @@
+import { assertSalesOpen } from "./editorial-evolution";
 import { STRIPE_API_VERSION, CHECKOUT_INTEGRATION } from "./stripe-config";
 import { requirePayments } from "./payment-readiness";
 import { assertSaleAvailable } from "./editorial-operations";
@@ -193,6 +194,7 @@ export async function subscriptionRoutes(
     let amount = Number(old?.amount || 0),
       interval = String(old?.interval || "month");
     if (status === "active") {
+      await assertSalesOpen(e);
       requirePayments(e);
       if (e.STRIPE_SUBSCRIPTIONS_READY !== "1")
         fail(
@@ -250,6 +252,7 @@ export async function subscriptionRoutes(
       ),
     });
   if (path === "subscription-checkout" && method === "POST") {
+    await assertSalesOpen(e);
     requirePayments(e);
     if (e.STRIPE_SUBSCRIPTIONS_READY !== "1")
       fail("Assinaturas aguardam homologação do ciclo completo.", 503);

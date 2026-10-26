@@ -1,3 +1,4 @@
+import { assertSalesOpen } from "./editorial-evolution";
 import { STRIPE_API_VERSION, CHECKOUT_INTEGRATION } from "./stripe-config";
 import { requirePayments } from "./payment-readiness";
 import {
@@ -25,6 +26,7 @@ export async function retryOrder(
       "Este pedido não pode ser retomado. Consulte o suporte antes de tentar outra compra.",
       409,
     );
+  await assertSalesOpen(e);
   requirePayments(e);
   const authorization = { Authorization: "Bearer " + e.STRIPE_SECRET_KEY },
     res = await fetch(

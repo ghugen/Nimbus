@@ -24,6 +24,10 @@ Novas áreas: mural moderado, indicações e afiliados, propostas institucionais
 
 A orientação de estudantes está em `/comecar`; amostras em texto em `/amostras/:id`; o roteiro de usabilidade em `/avaliar`. A administração reúne prontidão, procura por temas, feedback privado e relatos de usabilidade. Autores têm primeiros passos, checklist por produto e condições de atualização registradas por aquisição. Veja [docs/EXPERIENCIA_E_LANCAMENTO.md](docs/EXPERIENCIA_E_LANCAMENTO.md) para entregas e limites.
 
+## Curadoria e continuidade
+
+Trilhas por semestre, glossário e atlas sujeitos à aprovação editorial, comparação de texto entre PDFs, correções importantes com avisos, calendário editorial, triagem de dúvidas, página `/situacao` e pausa administrativa de novos checkouts. Consulte [docs/CURADORIA_E_CONTINUIDADE.md](docs/CURADORIA_E_CONTINUIDADE.md) para os limites de cada recurso.
+
 ## Recursos implementados
 
 - Identidade Nimbus, página inicial, navegação por áreas e layout responsivo.

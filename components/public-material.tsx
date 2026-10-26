@@ -1,4 +1,5 @@
 "use client";
+import { MaterialErrata } from "./editorial-evolution";
 import { MaterialConfidence } from "./experience-panels";
 import { disciplineSlug } from "@/lib/discipline";
 import { PreviewGallery } from "./preview-gallery";
@@ -191,6 +192,7 @@ export function PublicMaterial({ product: p }: { product: Product }) {
         </a>
         <ProductInformation product={p} />
         <MaterialConfidence id={p.id} />
+        <MaterialErrata id={p.id} />
         {p.author_slug && <FollowAuthor slug={p.author_slug} />}
         <RelatedMaterials productId={p.id} />
       </div>

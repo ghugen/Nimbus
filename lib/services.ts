@@ -1,3 +1,4 @@
+import { assertSalesOpen } from "./editorial-evolution";
 import { STRIPE_API_VERSION, CHECKOUT_INTEGRATION } from "./stripe-config";
 import { requirePayments } from "./payment-readiness";
 import { retryOrder } from "./payment-retry";
@@ -515,6 +516,7 @@ export async function serviceRoutes(
     return json({ ok: true });
   }
   if (path === "service-checkout" && method === "POST") {
+    await assertSalesOpen(e);
     requirePayments(e);
     if (!e.STRIPE_SECRET_KEY)
       fail("Pagamentos de serviços ainda não foram ativados.", 503);

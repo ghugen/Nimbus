@@ -6,6 +6,7 @@ export async function publicationNotices(
   revision: string,
   updated = false,
   includeFollowers = true,
+  correction?: { title: string; message: string },
 ) {
   const followers = (
     await e.DB.prepare(
@@ -44,8 +45,9 @@ export async function publicationNotices(
       e,
       id,
       r.user_id,
-      "Nova versão disponível",
-      p.title + " recebeu uma atualização aprovada. Consulte a biblioteca.",
+      correction?.title || "Nova versão disponível",
+      correction?.message ||
+        p.title + " recebeu uma atualização aprovada. Consulte a biblioteca.",
       "/#biblioteca",
     );
     await deliver(e, id);
