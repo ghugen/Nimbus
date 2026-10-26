@@ -1,4 +1,5 @@
 "use client";
+import { PageStudyTools } from "./page-study-tools";
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { signedFetch } from "@/lib/client-auth";
@@ -11,7 +12,7 @@ export function PdfReader({
 }: {
   productId: string;
   publicSource?: string;
-  jump?: {page:number;key:number};
+  jump?: { page: number; key: number };
 }) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null),
     [page, setPage] = useState(1),
@@ -30,7 +31,9 @@ export function PdfReader({
     box = useRef<HTMLDivElement>(null),
     searchRun = useRef(0);
   const privateMode = !publicSource;
-  useEffect(()=>{if(doc&&jump)setPage(Math.max(1,Math.min(doc.numPages,jump.page)));},[jump,doc]);
+  useEffect(() => {
+    if (doc && jump) setPage(Math.max(1, Math.min(doc.numPages, jump.page)));
+  }, [jump, doc]);
   async function refreshNotes() {
     if (privateMode)
       setAnnotations(
@@ -406,6 +409,11 @@ export function PdfReader({
           adicione o material à biblioteca.
         </small>
       )}
+      <PageStudyTools
+        key={productId + ":" + page}
+        canvas={canvas}
+        text={text}
+      />
     </section>
   );
 }

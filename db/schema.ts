@@ -793,3 +793,64 @@ export const evolutionRecords = sqliteTable("evolution_records", {
   created: text("created").notNull(),
   updated: text("updated").notNull(),
 });
+
+export const practiceSessions = sqliteTable("practice_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  questions: text("questions").notNull(),
+  answers: text("answers").notNull().default("[]"),
+  status: text("status").notNull().default("active"),
+  deadline: text("deadline").notNull().default(""),
+  created: text("created").notNull(),
+  finished: text("finished").notNull().default(""),
+});
+export const personalCards = sqliteTable("personal_cards", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  front: text("front").notNull(),
+  back: text("back").notNull(),
+  page: integer("page").notNull().default(1),
+  created: text("created").notNull(),
+});
+export const adaptiveReviews = sqliteTable("adaptive_reviews", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  cardId: text("card_id").notNull(),
+  interval: integer("interval").notNull(),
+  repetitions: integer("repetitions").notNull(),
+  lapses: integer("lapses").notNull(),
+  due: text("due").notNull(),
+  examDate: text("exam_date").notNull().default(""),
+  updated: text("updated").notNull(),
+});
+export const reviewEvents = sqliteTable("review_events", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  cardId: text("card_id").notNull(),
+  result: text("result").notNull(),
+  created: text("created").notNull(),
+});
+export const academicMetadata = sqliteTable("academic_metadata", {
+  productId: text("product_id").primaryKey(),
+  draft: text("draft").notNull().default("{}"),
+  published: text("published").notNull().default("{}"),
+  updated: text("updated").notNull(),
+});
+export const aiEditorialDrafts = sqliteTable("ai_editorial_drafts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  kind: text("kind").notNull(),
+  data: text("data").notNull(),
+  sources: text("sources").notNull(),
+  created: text("created").notNull(),
+});
+
+export const editorialAdoptions = sqliteTable("editorial_adoptions", {
+  id: text("id").primaryKey(),
+  created: text("created").notNull(),
+});

@@ -1,4 +1,9 @@
 "use client";
+import {
+  AdvancedPractice,
+  AdaptiveCards,
+} from "@/components/advanced-practice";
+import { AcademicSearch } from "@/components/academic-editorial";
 import { SalesNotice } from "@/components/editorial-evolution";
 import {
   EditorialTools,
@@ -1315,6 +1320,16 @@ export default function Nimbus() {
               </div>
             </section>
           </>
+        )}
+        {view === "catalogo" && (
+          <div className="container">
+            <AcademicSearch
+              onSelect={(id) => {
+                const p = products.find((p) => p.id === id);
+                if (p) setDetail(p);
+              }}
+            />
+          </div>
         )}
         {view === "catalogo" && user && (
           <div className="container catalog-tools">
@@ -3541,6 +3556,14 @@ export default function Nimbus() {
               <Download size={17} /> Baixar meu arquivo
             </button>
             <LearningExperience productId={reader.product_id} />
+            <AdvancedPractice
+              productId={reader.product_id}
+              onPage={(page) => setReaderJump({ page, key: Date.now() })}
+            />
+            <AdaptiveCards
+              productId={reader.product_id}
+              onPage={(page) => setReaderJump({ page, key: Date.now() })}
+            />
             <StudyFeedback productId={reader.product_id} />
             {(reader.file_name?.toLowerCase().endsWith(".pdf") ||
               products.find((p) => p.id === reader.product_id)

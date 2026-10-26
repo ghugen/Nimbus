@@ -48,3 +48,6 @@ yarn-error.log*
 
 # PDF.js worker is copied from the locked dependency before dev/build.
 /public/pdfjs-worker-*.mjs
+
+# OCR runtime assets are copied from locked dependencies before dev/build.
+/public/ocr/

@@ -261,3 +261,5 @@ O script não conecta a banco remoto nem sobrescreve um arquivo existente. Aplic
 Validação desta entrega: TypeScript, build de produção, 8 testes unitários e 269 verificações de integração com SQLite real e Stripe/R2 simulados. Cobertura inclui isolamento de notas e rascunhos, limites de licenças, presentes, papéis de equipe, conteúdo aprovado, pontuação no servidor, capacidade de horários, reembolso, assinatura e restauração SQL. Os testes não substituem homologação com contas reais, dispositivos físicos, tecnologia assistiva ou teste de carga.
 
 O worker do PDF.js é copiado da dependência travada por `scripts/prepare-pdf-worker.mjs` antes de desenvolvimento/build e servido como arquivo estático versionado. Isso evita injetar o runtime de desenvolvimento dentro do Web Worker. A captura `docs/nimbus-reader-mobile.jpg` registra navegação e busca no leitor a 390 px com PDF original público, sem simular acesso privado.
+
+Consulte [Estudo avançado e assistência editorial](docs/ESTUDO_AVANCADO.md) para simulados, revisões, atlas, OCR e configuração pendente da IA.

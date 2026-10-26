@@ -1,3 +1,5 @@
+import { advancedStudy, safeQuestion } from "@/lib/advanced-study";
+import { editorialAI } from "@/lib/editorial-ai";
 import { editorialEvolution, assertSalesOpen } from "@/lib/editorial-evolution";
 import {
   studentExperience,
@@ -330,6 +332,11 @@ async function moderateProduct(u: Awaited<ReturnType<typeof auth>>, b: Body) {
       "UPDATE learning_packages SET published_cards=cards,published_questions=questions,published_lessons=lessons WHERE product_id=?",
       p.id,
     );
+  if (b.status === "published" && !scheduled)
+    await run(
+      "UPDATE academic_metadata SET published=draft WHERE product_id=?",
+      p.id,
+    );
   const feedback =
     clean(b.feedback, 5000) ||
     (b.status === "published"
@@ -450,6 +457,8 @@ async function dispatch(req: Request) {
       fail("Origem da solicitação inválida.", 403);
   }
   for (const handler of [
+    advancedStudy,
+    editorialAI,
     editorialEvolution,
     studentExperience,
     supportThread,
@@ -490,6 +499,31 @@ async function dispatch(req: Request) {
     const u = await auth(req);
     const profile = (await all("SELECT * FROM users WHERE id=?", u.id))[0];
     const data = {
+      practice_sessions: (
+        await all("SELECT * FROM practice_sessions WHERE user_id=?", u.id)
+      ).map((s) => ({
+        ...s,
+        questions:
+          s.status === "completed"
+            ? s.questions
+            : JSON.stringify(JSON.parse(String(s.questions)).map(safeQuestion)),
+      })),
+      personal_cards: await all(
+        "SELECT * FROM personal_cards WHERE user_id=?",
+        u.id,
+      ),
+      adaptive_reviews: await all(
+        "SELECT * FROM adaptive_reviews WHERE user_id=?",
+        u.id,
+      ),
+      review_events: await all(
+        "SELECT * FROM review_events WHERE user_id=?",
+        u.id,
+      ),
+      editorial_ai_drafts: await all(
+        "SELECT * FROM ai_editorial_drafts WHERE user_id=?",
+        u.id,
+      ),
       exported_at: now(),
       profile,
       orders: await all(

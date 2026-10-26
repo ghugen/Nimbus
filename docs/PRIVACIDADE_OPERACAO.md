@@ -73,3 +73,7 @@ Presentes e licenças guardam e-mail do destinatário e a vinculação à primei
 A exportação pessoal inclui os novos registros da própria conta, sem revelar tokens ou meios de pagamento. A exportação administrativa de recuperação contém dados de várias contas e deve ser tratada como cópia protegida. O manifesto não contém os arquivos: uma cópia separada do armazenamento é necessária. Nenhuma rotina nova executa exclusão automática, define prazo de retenção ou certifica adequação legal.
 
 Vídeos externos só carregam após a ação do estudante. Limites de uso guardam contadores de curta duração e limpam lotes vencidos. Os logs operacionais novos registram rota e categoria de falha; não incluem corpo da requisição ou segredo do provedor. A operação deve atualizar seu inventário, avisos e critérios de retenção antes da abertura comercial.
+
+## Estudo avançado e IA editorial
+
+Inventariar tentativas (incluindo respostas e questões preservadas), cartões privados, avaliações de dificuldade, data opcional de prova, intervalos de revisão e rascunhos editoriais com fontes. A exportação é restrita ao titular. Revisar retenção e excluir por procedimento autorizado conforme o fluxo acima. OCR é temporário no navegador; não é gravado no servidor nem enviado a um provedor externo. Voz usa apenas serviços identificados como locais pelo navegador. A geração editorial, quando configurada, exige declaração de direitos e consentimento explícito para envio de até três páginas ao provedor; documentar contratos e condições desse serviço antes da ativação.

@@ -1,4 +1,5 @@
 "use client";
+import { AcademicMetadataEditor, EditorialAI } from "./academic-editorial";
 import { EditorialTools } from "./editorial-evolution";
 import {
   AuthorOnboarding,
@@ -467,6 +468,8 @@ export function AuthorStudio({
                     <PublicationSchedule id={p.id} />
                     <ProductOperations id={p.id} />
                     <EditorialTools id={p.id} edit />
+                    <AcademicMetadataEditor id={p.id} />
+                    <EditorialAI id={p.id} />
                     <ExperienceEditor
                       id={p.id}
                       onSaved={() => load().catch((e) => setError(e.message))}

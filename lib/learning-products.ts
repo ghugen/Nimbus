@@ -13,8 +13,12 @@ import {
   type FeatureRuntime,
   type FeatureUser,
 } from "./feature-db";
-export type Card = { id: string; front: string; back: string };
+export type Card = { id: string; front: string; back: string; page?: number };
 export type Question = {
+  topic?: string;
+  difficulty?: string;
+  page?: number;
+  option_explanations?: string[];
   id: string;
   prompt: string;
   options: string[];
@@ -49,6 +53,12 @@ export function validatePackage(b: Record<string, unknown>) {
       fail("Preencha frente e verso dos cartões.");
     return {
       id: id(c.id),
+      page:
+        Number.isSafeInteger(c.page) &&
+        Number(c.page) > 0 &&
+        Number(c.page) <= 5000
+          ? Number(c.page)
+          : undefined,
       front: clean(c.front, 3000),
       back: clean(c.back, 5000),
     };
@@ -73,6 +83,21 @@ export function validatePackage(b: Record<string, unknown>) {
       prompt: clean(q.prompt, 4000),
       options: options as string[],
       correct: Number(q.correct),
+      topic: clean(q.topic, 100) || "Geral",
+      difficulty: ["easy", "medium", "hard"].includes(String(q.difficulty))
+        ? String(q.difficulty)
+        : "medium",
+      page:
+        Number.isSafeInteger(q.page) &&
+        Number(q.page) > 0 &&
+        Number(q.page) <= 5000
+          ? Number(q.page)
+          : undefined,
+      option_explanations:
+        Array.isArray(q.option_explanations) &&
+        q.option_explanations.length === options.length
+          ? q.option_explanations.map((x) => clean(x, 1500))
+          : undefined,
       explanation: clean(q.explanation, 5000),
     };
   });
@@ -227,7 +252,9 @@ export async function learningProducts(
     return json({
       package: {
         ...data,
-        questions: data.questions.map(({ correct, explanation, ...q }) => q),
+        questions: data.questions.map(
+          ({ correct, explanation, option_explanations, ...q }) => q,
+        ),
       },
       completed: await rows(
         e,

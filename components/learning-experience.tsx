@@ -332,6 +332,30 @@ export function LearningAuthor({
                 maxLength={5000}
               />
             </label>
+            <label>
+              Página da fonte (opcional)
+              <input
+                type="number"
+                min={1}
+                max={5000}
+                value={c.page || ""}
+                onChange={(e) =>
+                  setData({
+                    ...data,
+                    cards: data.cards.map((x, j) =>
+                      j === i
+                        ? {
+                            ...x,
+                            page: e.target.value
+                              ? Number(e.target.value)
+                              : undefined,
+                          }
+                        : x,
+                    ),
+                  })
+                }
+              />
+            </label>
             <button
               type="button"
               className="text-link"
@@ -425,6 +449,91 @@ export function LearningAuthor({
                   />
                 </label>
               </div>
+            ))}
+            <div className="form-row">
+              <label>
+                Tema
+                <input
+                  maxLength={100}
+                  value={q.topic || ""}
+                  onChange={(e) =>
+                    setData({
+                      ...data,
+                      questions: data.questions.map((x, n) =>
+                        n === i ? { ...x, topic: e.target.value } : x,
+                      ),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Dificuldade
+                <select
+                  value={q.difficulty || "medium"}
+                  onChange={(e) =>
+                    setData({
+                      ...data,
+                      questions: data.questions.map((x, n) =>
+                        n === i ? { ...x, difficulty: e.target.value } : x,
+                      ),
+                    })
+                  }
+                >
+                  <option value="easy">Básica</option>
+                  <option value="medium">Intermediária</option>
+                  <option value="hard">Avançada</option>
+                </select>
+              </label>
+              <label>
+                Página de referência
+                <input
+                  type="number"
+                  min={1}
+                  max={5000}
+                  value={q.page || ""}
+                  onChange={(e) =>
+                    setData({
+                      ...data,
+                      questions: data.questions.map((x, n) =>
+                        n === i
+                          ? {
+                              ...x,
+                              page: e.target.value
+                                ? Number(e.target.value)
+                                : undefined,
+                            }
+                          : x,
+                      ),
+                    })
+                  }
+                />
+              </label>
+            </div>
+            {q.options.map((_, j) => (
+              <label key={"comment-" + j}>
+                Comentário da alternativa {j + 1}
+                <textarea
+                  maxLength={1500}
+                  value={q.option_explanations?.[j] || ""}
+                  onChange={(e) =>
+                    setData({
+                      ...data,
+                      questions: data.questions.map((x, n) =>
+                        n === i
+                          ? {
+                              ...x,
+                              option_explanations: x.options.map((_, k) =>
+                                k === j
+                                  ? e.target.value
+                                  : x.option_explanations?.[k] || "",
+                              ),
+                            }
+                          : x,
+                      ),
+                    })
+                  }
+                />
+              </label>
             ))}
             <label>
               Explicação e referência

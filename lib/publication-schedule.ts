@@ -21,6 +21,9 @@ export async function releaseDuePublications(
   for (const p of due) {
     await e.DB.batch([
       e.DB.prepare(
+        "UPDATE academic_metadata SET published=draft WHERE product_id=?",
+      ).bind(p.id),
+      e.DB.prepare(
         "UPDATE editorial_tools SET published=draft WHERE product_id=?",
       ).bind(p.id),
       e.DB.prepare(

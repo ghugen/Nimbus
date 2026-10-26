@@ -7,7 +7,13 @@ type Atlas = {
   question: string;
   answer: string;
   source: string;
-  points: { x: number; y: number; label: string }[];
+  points: {
+    x: number;
+    y: number;
+    label: string;
+    question?: string;
+    answer?: string;
+  }[];
 };
 export function EditorialTools({
   id,
@@ -146,9 +152,11 @@ export function EditorialTools({
                     const points = e.target.value
                       .split("\n")
                       .filter((l) => l.trim())
-                      .map((l) => {
+                      .map((l, pointIndex) => {
                         const [x, y, ...label] = l.split("|");
                         return {
+                          question: a.points[pointIndex]?.question || "",
+                          answer: a.points[pointIndex]?.answer || "",
                           x: Number(x),
                           y: Number(y),
                           label: label.join("|").trim(),
@@ -163,6 +171,37 @@ export function EditorialTools({
                   }}
                 />
               </label>
+              {a.points.map((point, n) => (
+                <div className="source-card" key={n}>
+                  <strong>Exercício da marcação {n + 1}</strong>
+                  {(["question", "answer"] as const).map((key) => (
+                    <label key={key}>
+                      {key === "question" ? "Pergunta" : "Resposta comentada"}
+                      <textarea
+                        maxLength={key === "question" ? 1000 : 2000}
+                        value={point[key] || ""}
+                        onChange={(e) =>
+                          setData((d) => ({
+                            ...d,
+                            atlas: d.atlas!.map((entry, j) =>
+                              j === i
+                                ? {
+                                    ...entry,
+                                    points: entry.points.map((p, k) =>
+                                      k === n
+                                        ? { ...p, [key]: e.target.value }
+                                        : p,
+                                    ),
+                                  }
+                                : entry,
+                            ),
+                          }))
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+              ))}
               <button
                 className="text-link"
                 type="button"
@@ -234,36 +273,12 @@ export function EditorialTools({
             <p>O autor ainda não publicou um glossário.</p>
           )}
           {(data.atlas || []).map((a, i) => (
-            <article className="source-card" key={i}>
-              <div className="atlas-image">
-                <img
-                  src={"/api/asset/" + id + "/preview/" + a.image}
-                  alt={a.caption}
-                />
-                {a.points.map((p, n) => (
-                  <span
-                    key={n}
-                    style={{ left: p.x + "%", top: p.y + "%" }}
-                    title={p.label}
-                  >
-                    {n + 1}
-                  </span>
-                ))}
-              </div>
-              <p className="pre-line">{a.caption}</p>
-              <ol>
-                {a.points.map((p, n) => (
-                  <li key={n}>{p.label}</li>
-                ))}
-              </ol>
-              <p>Fonte: {a.source || "Não informada"}</p>
-              {a.question && (
-                <details>
-                  <summary>{a.question}</summary>
-                  <p>{a.answer}</p>
-                </details>
-              )}
-            </article>
+            <AtlasViewer
+              key={i}
+              id={id}
+              atlas={a}
+              others={(data.atlas || []).filter((_, n) => n !== i)}
+            />
           ))}
         </>
       )}
@@ -504,4 +519,142 @@ export function SalesNotice() {
       <a href="/situacao">Acompanhar situação</a>
     </div>
   ) : null;
+}
+
+function AtlasViewer({
+  id,
+  atlas: a,
+  others,
+}: {
+  id: string;
+  atlas: Atlas;
+  others: Atlas[];
+}) {
+  const [zoom, setZoom] = useState(100),
+    [labels, setLabels] = useState(true),
+    [active, setActive] = useState<number | null>(null),
+    [compare, setCompare] = useState(-1);
+  function image(entry: Atlas, interactive: boolean) {
+    return (
+      <div
+        className="atlas-scroll"
+        tabIndex={0}
+        aria-label="Imagem ampliada; use as barras para navegar"
+      >
+        <div
+          className="atlas-image"
+          style={{ width: zoom + "%", maxWidth: "none" }}
+        >
+          <img
+            src={"/api/asset/" + id + "/preview/" + entry.image}
+            alt={entry.caption}
+          />
+          {entry.points.map((p, n) =>
+            interactive ? (
+              <button
+                className="atlas-marker"
+                key={n}
+                style={{ left: p.x + "%", top: p.y + "%" }}
+                aria-label={
+                  labels
+                    ? `Marcação ${n + 1}: ${p.label}`
+                    : `Exercitar marcação ${n + 1}`
+                }
+                onClick={() => setActive(n)}
+              >
+                {n + 1}
+              </button>
+            ) : (
+              <span key={n} style={{ left: p.x + "%", top: p.y + "%" }}>
+                {n + 1}
+              </span>
+            ),
+          )}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <article className="source-card">
+      <div className="studio-actions">
+        <label>
+          Ampliação
+          <select
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+          >
+            {[100, 150, 200, 300].map((n) => (
+              <option value={n} key={n}>
+                {n}%
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={labels}
+            onChange={(e) => setLabels(e.target.checked)}
+          />
+          Mostrar legendas
+        </label>
+        {others.length > 0 && (
+          <label>
+            Comparar com
+            <select
+              value={compare}
+              onChange={(e) => setCompare(Number(e.target.value))}
+            >
+              <option value={-1}>Sem comparação</option>
+              {others.map((o, i) => (
+                <option value={i} key={i}>
+                  {o.caption || "Imagem " + (i + 1)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      <div className={compare >= 0 ? "atlas-compare" : ""}>
+        <div>
+          {image(a, true)}
+          <p className="pre-line">{a.caption}</p>
+          <p>Fonte: {a.source || "Não informada"}</p>
+        </div>
+        {compare >= 0 && others[compare] && (
+          <div>
+            {image(others[compare], false)}
+            <p>{others[compare].caption}</p>
+            <p>Fonte: {others[compare].source || "Não informada"}</p>
+          </div>
+        )}
+      </div>
+      {labels && (
+        <ol>
+          {a.points.map((p, i) => (
+            <li key={i}>{p.label}</li>
+          ))}
+        </ol>
+      )}
+      {active !== null && a.points[active] && (
+        <section className="notice" key={active}>
+          <h4>Marcação {active + 1}</h4>
+          <p>
+            {a.points[active].question ||
+              "Qual conceito ou estrutura esta marcação indica?"}
+          </p>
+          <details>
+            <summary>Conferir resposta</summary>
+            <p>{a.points[active].answer || a.points[active].label}</p>
+          </details>
+        </section>
+      )}
+      {a.question && (
+        <details>
+          <summary>{a.question}</summary>
+          <p>{a.answer}</p>
+        </details>
+      )}
+    </article>
+  );
 }

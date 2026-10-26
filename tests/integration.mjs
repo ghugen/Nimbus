@@ -3682,6 +3682,403 @@ try {
     checks++;
   }
 
+  {
+    const id = "experience-free-fixture";
+    const guideSearch = await (
+      await call("academic-search?q=Seu%20plano%20de%20estudos", { user: null })
+    ).json();
+    assert(guideSearch.products.some((p) => p.id === "planejamento-academico"));
+    checks++;
+
+    const qs = [
+      {
+        id: "adv-one",
+        prompt: "Qual conceito está no primeiro tema?",
+        options: ["Certa", "Segunda", "Terceira", "Quarta"],
+        correct: 0,
+        explanation: "Conferir a página um.",
+        topic: "Método",
+        difficulty: "easy",
+        page: 1,
+        option_explanations: [
+          "Correta pelo método",
+          "Não corresponde",
+          "Falta evidência",
+          "Não corresponde",
+        ],
+      },
+      {
+        id: "adv-two",
+        prompt: "Qual conceito avançado consta do segundo tema?",
+        options: ["A", "B", "C", "D"],
+        correct: 1,
+        explanation: "Conferir a página dois.",
+        topic: "Revisão",
+        difficulty: "hard",
+        page: 2,
+      },
+    ];
+    db.prepare(
+      "INSERT INTO learning_packages(product_id,cards,questions,lessons,published_cards,published_questions,published_lessons,updated) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET published_questions=excluded.published_questions,published_cards=excluded.published_cards",
+    ).run(
+      id,
+      "[]",
+      "[]",
+      "[]",
+      JSON.stringify([
+        {
+          id: "adv-card",
+          front: "Conceito de revisão",
+          back: "Resposta de referência",
+        },
+      ]),
+      JSON.stringify(qs),
+      "[]",
+      new Date().toISOString(),
+    );
+    await expectStatus("practice?id=" + id, { user: "policy-outsider" }, 403);
+    await expectStatus(
+      "study-card-review?id=" + id,
+      { user: "policy-student" },
+      405,
+    );
+    const active = await (
+      await call("practice", {
+        user: "policy-student",
+        body: {
+          product_id: id,
+          action: "start",
+          count: 10,
+          minutes: 10,
+          topic: "Método",
+          difficulty: "easy",
+        },
+      })
+    ).json();
+    assert.equal(active.session.questions.length, 1);
+    assert.equal(active.session.questions[0].correct, undefined);
+    assert.equal(active.session.questions[0].option_explanations, undefined);
+    assert.equal(active.session.questions[0].explanation, undefined);
+    checks += 4;
+    const sid = active.session.id;
+    const earlyExport = await (
+      await call("privacy-export", { user: "policy-student" })
+    ).json();
+    const earlyQuestions = JSON.parse(
+      earlyExport.practice_sessions.find((s) => s.id === sid).questions,
+    );
+    assert.equal(earlyQuestions[0].correct, undefined);
+    checks++;
+
+    const resumed = await (
+      await call("practice", {
+        user: "policy-student",
+        body: { product_id: id, action: "start", count: 1 },
+      })
+    ).json();
+    assert.equal(resumed.session.id, sid);
+    checks++;
+    await expectStatus(
+      "practice",
+      {
+        user: "policy-outsider",
+        body: {
+          product_id: id,
+          action: "finish",
+          session_id: sid,
+          answers: [0],
+        },
+      },
+      403,
+    );
+    await expectStatus(
+      "practice",
+      {
+        user: "policy-student",
+        body: { product_id: id, action: "save", session_id: sid, answers: [9] },
+      },
+      400,
+    );
+    await expectStatus(
+      "practice",
+      {
+        user: "policy-student",
+        body: { product_id: id, action: "save", session_id: sid, answers: [0] },
+      },
+      200,
+    );
+    db.prepare(
+      "UPDATE learning_packages SET published_questions=? WHERE product_id=?",
+    ).run(JSON.stringify(qs.map((q) => ({ ...q, correct: 3 }))), id);
+    const completed = await (
+      await call("practice", {
+        user: "policy-student",
+        body: {
+          product_id: id,
+          action: "finish",
+          session_id: sid,
+          answers: [0],
+        },
+      })
+    ).json();
+    assert.equal(completed.session.score, 1);
+    assert.equal(
+      completed.session.feedback[0].options[0].explanation,
+      qs[0].option_explanations[0],
+    );
+    checks += 2;
+    const repeat = await (
+      await call("practice", {
+        user: "policy-student",
+        body: {
+          product_id: id,
+          action: "finish",
+          session_id: sid,
+          answers: [3],
+        },
+      })
+    ).json();
+    assert.equal(repeat.session.score, 1);
+    checks++;
+    const timed = await (
+      await call("practice", {
+        user: "policy-student",
+        body: { product_id: id, action: "start", count: 1, minutes: 1 },
+      })
+    ).json();
+    db.prepare("UPDATE practice_sessions SET deadline=? WHERE id=?").run(
+      "2000-01-01T00:00:00.000Z",
+      timed.session.id,
+    );
+    const expired = await (
+      await call("practice", {
+        user: "policy-student",
+        body: {
+          product_id: id,
+          action: "finish",
+          session_id: timed.session.id,
+          answers: [3],
+        },
+      })
+    ).json();
+    assert.equal(expired.session.score, 0);
+    assert.equal(expired.session.status, "completed");
+    checks += 2;
+    await expectStatus(
+      "study-cards",
+      {
+        user: "policy-student",
+        body: {
+          product_id: id,
+          front: "Minha pergunta",
+          back: "Minha anotação privada",
+          page: 1,
+        },
+      },
+      200,
+    );
+    const cards = await (
+      await call("study-cards?id=" + id, { user: "policy-student" })
+    ).json();
+    const personal = cards.cards.find((c) => c.personal);
+    assert(personal);
+    checks++;
+    const review = {
+      product_id: id,
+      card_id: personal.id,
+      rating: "hard",
+      request_id: crypto.randomUUID(),
+    };
+    await expectStatus(
+      "study-card-review",
+      { user: "policy-student", body: review },
+      200,
+    );
+    await expectStatus(
+      "study-card-review",
+      { user: "policy-student", body: review },
+      200,
+    );
+    const stored = db
+      .prepare("SELECT * FROM adaptive_reviews WHERE card_id=?")
+      .get(personal.id);
+    assert.equal(stored.repetitions, 1);
+    assert.equal(stored.interval, 1);
+    assert.equal(stored.lapses, 1);
+    checks += 3;
+    await expectStatus(
+      "study-card-review",
+      { user: "policy-student", body: { ...review, card_id: "adv-card" } },
+      409,
+    );
+    await expectStatus(
+      "study-card-review",
+      {
+        user: "policy-student",
+        body: {
+          ...review,
+          request_id: crypto.randomUUID(),
+          exam_date: "2000-01-01",
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "academic-metadata",
+      {
+        user: "policy-student",
+        body: { product_id: id, institution: "Outro autor" },
+      },
+      403,
+    );
+    const todayReview = await (
+      await call("study-card-review", {
+        user: "policy-student",
+        body: {
+          ...review,
+          request_id: crypto.randomUUID(),
+          exam_date: new Date().toISOString().slice(0, 10),
+          rating: "easy",
+        },
+      })
+    ).json();
+    assert.equal(todayReview.due, new Date().toISOString().slice(0, 10));
+    assert.equal(todayReview.interval, 0);
+    checks += 2;
+    await expectStatus(
+      "study-card-review",
+      {
+        user: "policy-student",
+        body: {
+          ...review,
+          request_id: crypto.randomUUID(),
+          exam_date: "2027-02-30",
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "academic-metadata",
+      {
+        user: "admin",
+        body: {
+          product_id: id,
+          institution: "Instituto Teste Nimbus",
+          course_code: "NIM-2026",
+          isbn: "978-85-0000-000-0",
+          edition: "2",
+        },
+      },
+      200,
+    );
+    let found = await (
+      await call("academic-search?q=NIM-2026", { user: null })
+    ).json();
+    assert(!found.products.some((p) => p.id === id));
+    checks++;
+    await expectStatus(
+      "admin",
+      {
+        user: "admin",
+        body: { action: "product", id, status: "published", reviewed: true },
+      },
+      200,
+    );
+    found = await (
+      await call("academic-search?q=NIM-2026", { user: null })
+    ).json();
+    assert(found.products.some((p) => p.id === id));
+    assert(!JSON.stringify(found).includes("file_key"));
+    checks += 2;
+    await expectStatus(
+      "editorial-ai",
+      {
+        user: "policy-student",
+        body: { product_id: id, kind: "cards", consent: true, rights: true },
+      },
+      403,
+    );
+    await expectStatus(
+      "editorial-ai",
+      {
+        user: "admin",
+        body: { product_id: id, kind: "cards", consent: true, rights: true },
+      },
+      503,
+    );
+    db.prepare(
+      "INSERT INTO ai_editorial_drafts(id,user_id,product_id,kind,data,sources,created) VALUES(?,?,?,?,?,?,?)",
+    ).run(
+      "draft-test",
+      "admin",
+      id,
+      "cards",
+      JSON.stringify({
+        cards: [
+          {
+            front: "Pergunta criada para revisão humana",
+            back: "Resposta a ser conferida.",
+          },
+        ],
+        questions: [],
+        glossary: [],
+        map: [],
+      }),
+      "[]",
+      new Date().toISOString(),
+    );
+    await expectStatus(
+      "editorial-ai",
+      {
+        user: "admin",
+        body: { product_id: id, action: "adopt", draft_id: "draft-test" },
+      },
+      400,
+    );
+    await expectStatus(
+      "editorial-ai",
+      {
+        user: "admin",
+        body: {
+          product_id: id,
+          action: "adopt",
+          draft_id: "draft-test",
+          reviewed: true,
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "editorial-ai",
+      {
+        user: "admin",
+        body: {
+          product_id: id,
+          action: "adopt",
+          draft_id: "draft-test",
+          reviewed: true,
+        },
+      },
+      200,
+    );
+    const pkg = db
+      .prepare("SELECT * FROM learning_packages WHERE product_id=?")
+      .get(id);
+    assert.equal(JSON.parse(pkg.cards).length, 1);
+    assert.equal(JSON.parse(pkg.published_cards).length, 0);
+    assert.equal(
+      db.prepare("SELECT status FROM products WHERE id=?").get(id).status,
+      "draft",
+    );
+    checks += 3;
+    const exp = await (
+      await call("privacy-export", { user: "policy-student" })
+    ).json();
+    assert(exp.personal_cards.some((c) => c.front === "Minha pergunta"));
+    assert(exp.practice_sessions.some((s) => s.id === sid));
+    checks += 2;
+  }
+
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );

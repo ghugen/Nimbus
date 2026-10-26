@@ -1,3 +1,4 @@
+import "./prepare-ocr.mjs";
 import "./prepare-pdf-worker.mjs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

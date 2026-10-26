@@ -149,7 +149,13 @@ export async function editorialEvolution(
           !Array.isArray(x.points) ||
           x.points.length > 20 ||
           x.points.some(
-            (p: { x: number; y: number; label: string }) =>
+            (p: {
+              x: number;
+              y: number;
+              label: string;
+              question?: string;
+              answer?: string;
+            }) =>
               !Number.isFinite(p.x) ||
               p.x < 0 ||
               p.x > 100 ||
@@ -174,11 +180,21 @@ export async function editorialEvolution(
         question: clean(x.question, 1000),
         answer: clean(x.answer, 2000),
         source: clean(x.source, 1000),
-        points: x.points.map((p: { x: number; y: number; label: string }) => ({
-          x: p.x,
-          y: p.y,
-          label: clean(p.label, 200),
-        })),
+        points: x.points.map(
+          (p: {
+            x: number;
+            y: number;
+            label: string;
+            question?: string;
+            answer?: string;
+          }) => ({
+            x: p.x,
+            y: p.y,
+            label: clean(p.label, 200),
+            question: clean(p.question, 1000),
+            answer: clean(p.answer, 2000),
+          }),
+        ),
       })),
     });
     await e.DB.batch([
