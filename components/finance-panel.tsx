@@ -1,4 +1,5 @@
 "use client";
+import { downloadPrivate } from "@/lib/client-auth";
 import { useState } from "react";
 import { money } from "@/lib/catalog";
 import type {
@@ -98,6 +99,26 @@ export function FinancePanel({
           Limpar filtros
         </button>
       </div>
+      <button
+        className="btn secondary small"
+        onClick={() => {
+          const start = from || (month ? month + "-01" : "2000-01-01");
+          const end =
+            to ||
+            (month
+              ? new Date(
+                  Number(month.slice(0, 4)),
+                  Number(month.slice(5, 7)),
+                  0,
+                ).toLocaleDateString("sv-SE")
+              : new Date().toLocaleDateString("sv-SE"));
+          downloadPrivate(
+            "/api/finance-export?from=" + start + "&to=" + end,
+          ).catch((e) => setError(e.message));
+        }}
+      >
+        Exportar período (CSV)
+      </button>
       <div className="finance-summary">
         {[
           ["Vendas conciliadas", totals.gross],
@@ -201,7 +222,10 @@ export function FinancePanel({
           <p className="muted">
             Pedidos antigos sem regra registrada não são recalculados
             retroativamente. A ausência da taxa real impede a liberação do
-            saldo.
+            saldo. Consulte o provedor para confirmar pagamento, moeda, valor e
+            taxa. Se houver divergência ou disputa, mantenha o repasse bloqueado
+            e registre a tratativa em Tarefas. Registre repasse somente após
+            conferir o comprovante da transferência externa.
           </p>
           {report.pending.map((p) => (
             <div className="order-line" key={p.id}>

@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { restoreSnapshot } from "../scripts/restore-backup.mjs";
 import { readFile, mkdtemp, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1379,6 +1380,757 @@ try {
   assert.equal(typeof overview.nimbus_net, "number");
   assert(!JSON.stringify(overview).includes("@"));
   checks++;
+  {
+    // New marketplace capabilities: verify isolation and authorization against the real SQL schema.
+    db.exec("DELETE FROM rate_buckets");
+    await expectStatus("reader-state?id=metodo", { user: null }, 401);
+    await expectStatus("reader-state?id=metodo", { user: "outsider" }, 403);
+    await expectStatus(
+      "reader-state",
+      {
+        body: {
+          product_id: "metodo",
+          page: 2,
+          zoom: 125,
+          folder: "Semestre",
+          status: "studying",
+          next_review: "2026-12-10",
+        },
+      },
+      200,
+    );
+    assert.equal(
+      (await (await call("reader-state?id=metodo")).json()).state.page,
+      2,
+    );
+    checks++;
+    await expectStatus(
+      "reader-state",
+      { body: { product_id: "metodo", page: -1 } },
+      400,
+    );
+    await expectStatus(
+      "page-annotations",
+      {
+        body: {
+          product_id: "metodo",
+          page: 2,
+          kind: "note",
+          text: "Anotação privada",
+        },
+      },
+      200,
+    );
+    const note = (await (await call("page-annotations?id=metodo")).json())
+      .annotations[0];
+    await expectStatus(
+      "checkout",
+      { user: "readerbob", body: { ids: ["metodo"], accepted: true } },
+      200,
+    );
+    await expectStatus(
+      "page-annotations",
+      {
+        user: "readerbob",
+        body: { product_id: "metodo", action: "delete", id: note.id },
+      },
+      200,
+    );
+    assert.equal(
+      (await (await call("page-annotations?id=metodo")).json()).annotations
+        .length,
+      1,
+    );
+    checks++;
+    await expectStatus(
+      "author-draft",
+      {
+        body: {
+          key: "new",
+          data: {
+            title: "Rascunho privado",
+            rights: true,
+            commercial_accepted: true,
+          },
+        },
+      },
+      200,
+    );
+    const restored = JSON.parse(
+      (await (await call("author-draft?key=new")).json()).draft.data,
+    );
+    assert.equal(restored.rights, false);
+    assert.equal(restored.commercial_accepted, false);
+    checks++;
+    assert.equal(
+      (await (await call("author-draft?key=new", { user: "readerbob" })).json())
+        .draft,
+      null,
+    );
+    checks++;
+    await expectStatus(
+      "saved-searches",
+      { body: { title: "Minha pesquisa", filters: { q: "anatomia" } } },
+      200,
+    );
+    assert.equal(
+      (await (await call("saved-searches", { user: "outsider" })).json())
+        .searches.length,
+      0,
+    );
+    checks++;
+    await expectStatus("roadmap", { user: "alice" }, 403);
+    const roadmapData = (
+      await (await call("roadmap", { user: "admin" })).json()
+    ).items;
+    assert.equal(roadmapData.length, 100);
+    checks++;
+    await expectStatus(
+      "staff-roles",
+      { user: "alice", body: { user_id: "alice", reviewer: true } },
+      403,
+    );
+    await expectStatus(
+      "staff-roles",
+      {
+        user: "admin",
+        body: { user_id: "outsider", reviewer: true, support: false },
+      },
+      200,
+    );
+    await expectStatus("staff-review", { user: "outsider" }, 200);
+    await expectStatus("staff-support", { user: "outsider" }, 403);
+    await expectStatus("finance", { user: "outsider" }, 403);
+    await expectStatus("management-report", { user: "outsider" }, 403);
+    await expectStatus("management-report?from=bad", { user: "admin" }, 400);
+    const report = await (
+      await expectStatus("management-report", { user: "admin" }, 200)
+    ).json();
+    assert(Array.isArray(report.products));
+    assert(Array.isArray(report.campaigns));
+    checks++;
+    await expectStatus("backup-export", { user: "outsider" }, 403);
+    const backup = await (
+      await expectStatus("backup-export", { user: "admin" }, 200)
+    ).json();
+    assert.equal(backup.format, "nimbus-data-v1");
+    assert(backup.tables.users.length > 0);
+    assert(Array.isArray(backup.object_manifest));
+    checks++;
+    const restoredDb = new DatabaseSync(":memory:");
+    for (const file of (await readdir("drizzle"))
+      .filter((x) => x.endsWith(".sql"))
+      .sort())
+      restoredDb.exec(await readFile("drizzle/" + file, "utf8"));
+    await restoreSnapshot(restoredDb, backup);
+    assert.equal(
+      restoredDb.prepare("SELECT COUNT(*) n FROM users").get().n,
+      backup.tables.users.length,
+    );
+    assert.equal(
+      restoredDb.prepare("SELECT COUNT(*) n FROM order_items").get().n,
+      backup.tables.order_items.length,
+    );
+    restoredDb.close();
+    checks++;
+
+    // A free gift grants only the verified recipient, then revokes access on a refund.
+    const gift = await (
+      await expectStatus(
+        "checkout",
+        {
+          user: "giftbuyer",
+          body: {
+            ids: ["metodo"],
+            accepted: true,
+            gift_email: "giftrecipient@nimbus.test",
+            seats: 1,
+          },
+        },
+        200,
+      )
+    ).json();
+    await expectStatus("download/metodo", { user: "giftbuyer" }, 403);
+    await expectStatus("download/metodo", { user: "giftrecipient" }, 200);
+    db.prepare("UPDATE orders SET status='refunded' WHERE id=?").run(
+      gift.order,
+    );
+    await expectStatus("download/metodo", { user: "giftrecipient" }, 403);
+    const group = await (
+      await expectStatus(
+        "checkout",
+        {
+          user: "teacher",
+          body: { ids: ["metodo"], accepted: true, seats: 2 },
+        },
+        200,
+      )
+    ).json();
+    await expectStatus(
+      "licenses",
+      {
+        user: "teacher",
+        body: { order_id: group.order, email: "student1@nimbus.test" },
+      },
+      200,
+    );
+    await expectStatus(
+      "licenses",
+      {
+        user: "teacher",
+        body: { order_id: group.order, email: "student2@nimbus.test" },
+      },
+      409,
+    );
+    await expectStatus("download/metodo", { user: "student1" }, 200);
+    await expectStatus(
+      "licenses",
+      {
+        user: "outsider",
+        body: { order_id: group.order, email: "thief@nimbus.test" },
+      },
+      403,
+    );
+    // Approved learning packages: unpublished edits must never leak to students.
+    const courseProduct = saved.id;
+    db.prepare(
+      "UPDATE products SET accepted_bps=(SELECT CASE WHEN owned=1 THEN 0 ELSE commission_bps END FROM author_accounts WHERE id=products.author_id),accepted_owned=(SELECT owned FROM author_accounts WHERE id=products.author_id) WHERE id=?",
+    ).run(courseProduct);
+    await expectStatus(
+      "learning-author",
+      { user: "outsider", body: { product_id: courseProduct, cards: [] } },
+      403,
+    );
+    const activities = {
+      product_id: courseProduct,
+      cards: [{ id: "card1", front: "Frente", back: "Verso" }],
+      questions: [
+        {
+          id: "q1",
+          prompt: "Quanto é dois mais dois?",
+          options: ["Três", "Quatro"],
+          correct: 1,
+          explanation: "Soma de dois e dois.",
+        },
+      ],
+      lessons: [
+        {
+          id: "l1",
+          title: "Aula inicial",
+          text: "Conteúdo original de uma aula de demonstração.",
+          video_url: "",
+        },
+      ],
+    };
+    await expectStatus(
+      "learning-author",
+      { user: "admin", body: activities },
+      200,
+    );
+    await expectStatus(
+      "admin",
+      {
+        user: "admin",
+        body: { action: "product", id: courseProduct, status: "published" },
+      },
+      200,
+    );
+    const purchase = await (
+      await expectStatus(
+        "checkout",
+        { user: "learner", body: { ids: ["metodo"], accepted: true } },
+        200,
+      )
+    ).json();
+    // Use a separate paid-order fixture to exercise entitlement; provider integration is tested elsewhere above.
+    db.prepare(
+      "INSERT INTO order_items(id,order_id,product_id,title,price,file_key,file_name,content,author_id,commission_bps,owned) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+    ).run(
+      "lms-fixture",
+      purchase.order,
+      courseProduct,
+      "Atividades",
+      0,
+      null,
+      null,
+      "",
+      "admin",
+      0,
+      1,
+    );
+    let learningData = await (
+      await expectStatus(
+        "learning-content?id=" + courseProduct,
+        { user: "learner" },
+        200,
+      )
+    ).json();
+    assert(!("correct" in learningData.package.questions[0]));
+    assert(!("explanation" in learningData.package.questions[0]));
+    checks++;
+    const scored = await (
+      await expectStatus(
+        "quiz-submit",
+        {
+          user: "learner",
+          body: { product_id: courseProduct, answers: [1], score: 0 },
+        },
+        200,
+      )
+    ).json();
+    assert.equal(scored.score, 1);
+    checks++;
+    await expectStatus(
+      "quiz-submit",
+      { user: "outsider", body: { product_id: courseProduct, answers: [1] } },
+      403,
+    );
+    await expectStatus(
+      "lesson-progress",
+      {
+        user: "learner",
+        body: { product_id: courseProduct, lesson_id: "l1", completed: true },
+      },
+      200,
+    );
+    await expectStatus(
+      "card-review",
+      {
+        user: "learner",
+        body: { product_id: courseProduct, card_id: "card1", level: "easy" },
+      },
+      200,
+    );
+    await expectStatus(
+      "learning-author",
+      {
+        user: "admin",
+        body: {
+          ...activities,
+          cards: [{ id: "card1", front: "NOVA SEM REVISÃO", back: "Privado" }],
+        },
+      },
+      200,
+    );
+    learningData = await (
+      await call("learning-content?id=" + courseProduct, { user: "learner" })
+    ).json();
+    assert.equal(learningData.package.cards[0].front, "Frente");
+    checks++;
+    await expectStatus(
+      "learning-author",
+      {
+        user: "admin",
+        body: {
+          ...activities,
+          lessons: [
+            {
+              id: "invalid",
+              title: "Vídeo ruim",
+              text: "Conteúdo original completo",
+              video_url: "https://evil.test/embed/x",
+            },
+          ],
+        },
+      },
+      400,
+    );
+    // Mentoring reservations enforce capacity in SQL and hide meeting URLs from strangers.
+    const offer = await (
+      await expectStatus(
+        "service-admin",
+        {
+          user: "admin",
+          body: {
+            title: "Mentoria de demonstração",
+            kind: "mentoria_individual",
+            description:
+              "Descrição suficiente para o encontro de demonstração.",
+            terms: "Condições completas do encontro de demonstração gratuita.",
+            price: 0,
+            duration: 30,
+            capacity: 1,
+            status: "published",
+          },
+        },
+        200,
+      )
+    ).json();
+    const starts = new Date(Date.now() + 86400000).toISOString(),
+      ends = new Date(Date.now() + 88200000).toISOString();
+    await expectStatus(
+      "service-admin",
+      {
+        user: "admin",
+        body: {
+          action: "slot",
+          offer_id: offer.id,
+          starts,
+          ends,
+          meeting_url: "https://meet.example.test/private",
+        },
+      },
+      200,
+    );
+    const slots = (
+      await (await call("service-slots?id=" + offer.id, { user: null })).json()
+    ).slots;
+    assert(!JSON.stringify(slots).includes("private"));
+    checks++;
+    await expectStatus(
+      "service-bookings",
+      { user: "learner", body: { slot_id: slots[0].id, accepted: true } },
+      200,
+    );
+    await expectStatus(
+      "service-bookings",
+      { user: "student1", body: { slot_id: slots[0].id, accepted: true } },
+      409,
+    );
+    assert(
+      (
+        await (await call("service-bookings", { user: "learner" })).text()
+      ).includes("private"),
+    );
+    checks++;
+    assert(
+      !(
+        await (await call("service-bookings", { user: "outsider" })).text()
+      ).includes("private"),
+    );
+    checks++;
+    const exported = await (
+      await expectStatus("privacy-export", { user: "learner" }, 200)
+    ).json();
+    assert.equal(exported.quiz_attempts.length, 1);
+    assert.equal(exported.bookings.length, 1);
+    checks++;
+    // Refund approval must be idempotent, revoke access and reconcile actual provider totals.
+    const refundOrder = "refund-new-fixture",
+      refundItem = "refund-new-item";
+    db.prepare(
+      "INSERT INTO orders(id,user_id,status,total,payment_intent,created) VALUES(?,?,'paid',500,?,?)",
+    ).run(refundOrder, "learner", "pi_refundfixture", new Date().toISOString());
+    db.prepare(
+      "INSERT INTO order_items(id,order_id,product_id,title,price,content,author_id,commission_bps,owned,policy_version) VALUES(?,?,?,?,500,'','admin',0,1,'services-owned-v1')",
+    ).run(refundItem, refundOrder, "refund-product", "Material para reembolso");
+    await expectStatus(
+      "refund-requests",
+      {
+        user: "outsider",
+        body: {
+          order_id: refundOrder,
+          reason: "Solicitação indevida de outra conta.",
+        },
+      },
+      404,
+    );
+    await expectStatus(
+      "refund-requests",
+      {
+        user: "learner",
+        body: {
+          order_id: refundOrder,
+          reason: "Motivo original do pedido de devolução.",
+        },
+      },
+      200,
+    );
+    const refundRequest = db
+      .prepare("SELECT id FROM refund_requests WHERE order_id=?")
+      .get(refundOrder).id;
+    await expectStatus(
+      "refund-requests",
+      { user: "learner", body: { action: "approve", id: refundRequest } },
+      403,
+    );
+    const fetchBeforeBilling = globalThis.fetch;
+    let refundCalls = 0;
+    globalThis.fetch = async (url, options) => {
+      if (String(url).endsWith("/refunds")) {
+        refundCalls++;
+        assert.equal(
+          options.headers["Idempotency-Key"],
+          "nimbus-refund:" + refundRequest,
+        );
+        assert.equal(options.body.get("amount"), "500");
+        return Response.json({
+          id: "re_fixture",
+          status: "succeeded",
+          amount: 500,
+        });
+      }
+      if (String(url).includes("/payment_intents/pi_refundfixture"))
+        return Response.json({
+          status: "succeeded",
+          latest_charge: {
+            id: "ch_refundfixture",
+            amount: 500,
+            amount_refunded: 500,
+            currency: "brl",
+            balance_transaction: {
+              id: "bt_refundfixture",
+              fee: 50,
+              currency: "brl",
+              amount: 500,
+              available_on: Math.floor(Date.now() / 1000),
+            },
+          },
+        });
+      throw Error("Unexpected provider endpoint " + url);
+    };
+    await expectStatus(
+      "refund-requests",
+      { user: "admin", body: { action: "approve", id: refundRequest } },
+      200,
+    );
+    assert.equal(
+      db.prepare("SELECT status FROM orders WHERE id=?").get(refundOrder)
+        .status,
+      "refunded",
+    );
+    assert.equal(
+      db
+        .prepare("SELECT refunded_gross FROM settlements WHERE id=?")
+        .get(refundItem).refunded_gross,
+      500,
+    );
+    assert.equal(
+      db
+        .prepare(
+          "SELECT COUNT(*) n FROM finance_events WHERE order_id=? AND type='hold'",
+        )
+        .get(refundOrder).n,
+      0,
+    );
+    checks++;
+    await expectStatus(
+      "refund-requests",
+      { user: "admin", body: { action: "approve", id: refundRequest } },
+      409,
+    );
+    assert.equal(refundCalls, 1);
+    checks++;
+    // Subscription access is verified with the provider and uses the contracted catalog snapshot.
+    const subProduct = "subscription-material-fixture";
+    db.prepare(
+      "INSERT INTO products(id,author_id,title,description,category,subject,format,price,pages,author,preview,status,file_key,file_name,accepted_bps,accepted_owned,created) VALUES(?,'admin','Material original de assinatura','Descrição original suficientemente completa','Saúde','Patologia','Resumo',1000,3,'Nimbus','Amostra original de assinatura','published','subscription-original.pdf','original.pdf',0,1,?)",
+    ).run(subProduct, new Date().toISOString());
+    objects.set("subscription-original.pdf", "%PDF-1.4 Original fixture");
+    let providerSubStatus = "active";
+    globalThis.fetch = async (url, opts) => {
+      if (String(url).endsWith("/checkout/sessions")) {
+        assert.equal(opts.body.get("mode"), "subscription");
+        return Response.json({
+          id: "cs_subfixture",
+          url: "https://checkout.stripe.test/subscription",
+        });
+      }
+      if (String(url).includes("/prices/price_fixture"))
+        return Response.json({
+          active: true,
+          currency: "brl",
+          unit_amount: 1500,
+          recurring: { interval: "month" },
+        });
+      if (String(url).includes("/subscriptions/sub_fixture"))
+        return Response.json({
+          id: "sub_fixture",
+          status: providerSubStatus,
+          customer: "cus_fixture",
+          items: {
+            data: [
+              {
+                price: { id: "price_fixture" },
+                current_period_end: Math.floor(Date.now() / 1000) + 86400,
+              },
+            ],
+          },
+          latest_invoice: {
+            paid: providerSubStatus === "active",
+            status: providerSubStatus === "active" ? "paid" : "open",
+          },
+        });
+      throw Error("Unexpected subscription endpoint " + url);
+    };
+    const subPlan = await (
+      await expectStatus(
+        "subscription-admin",
+        {
+          user: "admin",
+          body: {
+            title: "Biblioteca teste",
+            description: "Plano demonstrativo só do teste",
+            product_ids: [subProduct],
+            stripe_price_id: "price_fixture",
+            status: "active",
+          },
+        },
+        200,
+      )
+    ).json();
+    await expectStatus(
+      "subscription-checkout",
+      { user: "subscriber", body: { plan_id: subPlan.id, accepted: true } },
+      200,
+    );
+    const subLocalId = db
+      .prepare("SELECT id FROM subscriptions WHERE user_id='subscriber'")
+      .get().id;
+    assert.equal(
+      JSON.parse(
+        db
+          .prepare("SELECT assets FROM subscriptions WHERE id=?")
+          .get(subLocalId).assets,
+      )[0].file_key,
+      "subscription-original.pdf",
+    );
+    checks++;
+
+    await expectStatus("download/" + subProduct, { user: "subscriber" }, 403);
+    async function signedNewEvent(id, type, object, valid = true) {
+      const raw = JSON.stringify({ id, type, data: { object } }),
+        t = String(Math.floor(Date.now() / 1000)),
+        sig = createHmac("sha256", "whsec_fake")
+          .update(t + "." + raw)
+          .digest("hex");
+      return expectStatus(
+        "webhook",
+        {
+          user: null,
+          method: "POST",
+          raw,
+          headers: {
+            "stripe-signature": `t=${t},v1=${valid ? sig : "0".repeat(64)}`,
+          },
+        },
+        valid ? 200 : 400,
+      );
+    }
+    await signedNewEvent(
+      "evt_sub_bad",
+      "checkout.session.completed",
+      {
+        id: "cs_subfixture",
+        mode: "subscription",
+        subscription: "sub_fixture",
+        metadata: { nimbus_subscription_id: subLocalId },
+      },
+      false,
+    );
+    await expectStatus("download/" + subProduct, { user: "subscriber" }, 403);
+    await signedNewEvent("evt_sub_ok", "checkout.session.completed", {
+      id: "cs_subfixture",
+      mode: "subscription",
+      subscription: "sub_fixture",
+      metadata: { nimbus_subscription_id: subLocalId },
+    });
+    await expectStatus("download/" + subProduct, { user: "subscriber" }, 200);
+    await expectStatus(
+      "subscription-admin",
+      {
+        user: "admin",
+        body: {
+          id: subPlan.id,
+          title: "Biblioteca teste",
+          product_ids: [],
+          stripe_price_id: "price_fixture",
+          status: "active",
+        },
+      },
+      409,
+    );
+    db.prepare(
+      "UPDATE products SET status='draft',file_key='unapproved-file.pdf' WHERE id=?",
+    ).run(subProduct);
+    await expectStatus("download/" + subProduct, { user: "subscriber" }, 200);
+    // Even a changed plan definition cannot add uncontracted products to this subscription.
+    db.prepare("UPDATE subscription_plans SET product_ids='[]' WHERE id=?").run(
+      subPlan.id,
+    );
+    await expectStatus("download/" + subProduct, { user: "subscriber" }, 200);
+    providerSubStatus = "past_due";
+    await signedNewEvent("evt_sub_late", "invoice.payment_failed", {
+      id: "in_fixture",
+      subscription: "sub_fixture",
+    });
+    await expectStatus("download/" + subProduct, { user: "subscriber" }, 403);
+    globalThis.fetch = fetchBeforeBilling;
+    await expectStatus("admin?section=produtos&page=1", { user: "admin" }, 200);
+
+    const editorialVersions = await (
+      await expectStatus(
+        "editorial-versions?id=" + courseProduct,
+        { user: "admin" },
+        200,
+      )
+    ).json();
+    await expectStatus(
+      "editorial-versions?id=" + courseProduct,
+      { user: "outsider" },
+      403,
+    );
+    assert(editorialVersions.versions.length > 0);
+    checks++;
+    db.prepare(
+      "INSERT INTO content_issues(id,user_id,product_id,page,message,status,response,created,updated) VALUES('version-link-test','learner',?,'2','Correção original para teste','open','',?,?)",
+    ).run(courseProduct, new Date().toISOString(), new Date().toISOString());
+    await expectStatus(
+      "correction-version",
+      {
+        user: "outsider",
+        body: {
+          id: "version-link-test",
+          version_id: editorialVersions.versions[0].id,
+        },
+      },
+      403,
+    );
+    await expectStatus(
+      "correction-version",
+      {
+        user: "admin",
+        body: {
+          id: "version-link-test",
+          version_id: editorialVersions.versions[0].id,
+          response: "Correção já incorporada nesta versão.",
+        },
+      },
+      200,
+    );
+    assert.equal(
+      db
+        .prepare(
+          "SELECT status FROM content_issues WHERE id='version-link-test'",
+        )
+        .get().status,
+      "resolved",
+    );
+    checks++;
+    const fullBackup = await (
+      await call("backup-export", { user: "admin" })
+    ).json();
+    const recoveryDb = new DatabaseSync(":memory:");
+    for (const file of (await readdir("drizzle"))
+      .filter((x) => x.endsWith(".sql"))
+      .sort())
+      recoveryDb.exec(await readFile("drizzle/" + file, "utf8"));
+    await restoreSnapshot(recoveryDb, fullBackup);
+    assert.equal(
+      recoveryDb.prepare("SELECT COUNT(*) n FROM service_bookings").get().n,
+      fullBackup.tables.service_bookings.length,
+    );
+    assert.equal(
+      recoveryDb
+        .prepare("SELECT COUNT(*) n FROM sqlite_master WHERE type='trigger'")
+        .get().n,
+      db
+        .prepare("SELECT COUNT(*) n FROM sqlite_master WHERE type='trigger'")
+        .get().n,
+    );
+    recoveryDb.close();
+    checks++;
+  }
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );

@@ -1,4 +1,42 @@
 "use client";
+import { ManagementPanel } from "@/components/management-panel";
+import {
+  ReviewModeration,
+  VerificationPanel,
+} from "@/components/editorial-plus-panel";
+import { PreviewGallery } from "@/components/preview-gallery";
+import { StaffRolesPanel, StaffWorkspace } from "@/components/staff-panels";
+import { LicensePanel } from "@/components/license-panel";
+import {
+  SubscriptionPage,
+  SubscriptionAdmin,
+} from "@/components/subscription-panels";
+import { ServicesPage, ServicesAdmin } from "@/components/service-panels";
+import { LearningExperience } from "@/components/learning-experience";
+import { OrderTools } from "@/components/order-tools";
+import { RoadmapPanel } from "@/components/roadmap-panel";
+import {
+  RefundAdmin,
+  OperationsTasks,
+  ModerationPanel,
+} from "@/components/operations-plus-panel";
+import {
+  ProductInformation,
+  RelatedMaterials,
+  FollowAuthor,
+} from "@/components/product-information";
+import {
+  MaterialComparison,
+  SavedFilters,
+  PreferredTopics,
+} from "@/components/catalog-tools";
+import { searchMatches } from "@/lib/search";
+import { PdfReader } from "@/components/pdf-reader";
+import {
+  LibraryFilters,
+  StudyOrganization,
+  useLibraryOrganization,
+} from "@/components/library-tools";
 import {
   WorkspaceNavigation,
   AdminNavigation,
@@ -95,6 +133,7 @@ type User = {
   institution: string;
   created: string;
   admin: boolean;
+  staff?: { reviewer?: number; support?: number };
 };
 type LibraryItem = {
   product_id: string;
@@ -124,6 +163,9 @@ type Ticket = {
   email?: string;
 };
 type Review = {
+  clarity?: number;
+  presentation?: number;
+  response?: string;
   rating: number;
   comment: string;
   name: string;
@@ -136,6 +178,7 @@ type AuthorData = {
   sales: { product_id: string; price: number; created: string }[];
 };
 type AdminData = {
+  pagination?: { page: number; limit: number; total: number };
   products: Product[];
   users: User[];
   orders: Order[];
@@ -204,6 +247,15 @@ const emptyForm = {
 };
 export default function Nimbus() {
   const [authorTab, setAuthorTab] = useState("resumo");
+  const [clarityRating, setClarityRating] = useState(5),
+    [presentationRating, setPresentationRating] = useState(5);
+  const [purchaseMode, setPurchaseMode] = useState("individual");
+  const [seats, setSeats] = useState(1);
+  const [giftEmail, setGiftEmail] = useState("");
+  const [adminPage, setAdminPage] = useState(1);
+  const [compared, setCompared] = useState<string[]>([]);
+  const [preferredTopics, setPreferredTopics] = useState<string[]>([]);
+  const [catalogLimit, setCatalogLimit] = useState(24);
   const [libraryQuery, setLibraryQuery] = useState("");
   const [coupon, setCoupon] = useState<{
     code: string;
@@ -255,6 +307,7 @@ export default function Nimbus() {
     [rating, setRating] = useState(5),
     [comment, setComment] = useState(""),
     [payments, setPayments] = useState(false);
+  const organization = useLibraryOrganization(!!user && view === "biblioteca");
   function go(next: string) {
     window.location.hash = next;
     const route = parseNavigation(next);
@@ -345,9 +398,30 @@ export default function Nimbus() {
       if (view === "pedidos") setOrders((await api("orders")).orders);
       if (view === "suporte") setTickets((await api("tickets")).tickets);
       if (view === "autores") setAuthor(await api("author"));
-      if (view === "admin" && user.admin) setAdmin(await api("admin"));
     });
   }, [view, user?.id, adminTab]);
+  useEffect(() => {
+    setAdminPage(1);
+  }, [adminTab]);
+  useEffect(() => {
+    if (view !== "admin" || !user?.admin) return;
+    let active = true;
+    setAdmin(null);
+    api("admin?section=" + encodeURIComponent(adminTab) + "&page=" + adminPage)
+      .then((d) => {
+        if (active) setAdmin(d);
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [view, user?.id, adminTab, adminPage]);
+  useEffect(() => {
+    setCatalogLimit(24);
+  }, [query, category, format, course, subject, free, preferredTopics]);
+
   useEffect(() => {
     if (!detail) return;
     metric(detail.id, "view");
@@ -381,7 +455,7 @@ export default function Nimbus() {
     const modal = document.querySelector(".modal") as HTMLElement | null;
     const backgrounds = Array.from(
       document.querySelectorAll(
-        "header,main,footer,.announcement,.account-nav",
+        "header,main,footer,.announcement,.account-nav,.workspace-bar",
       ),
     ) as HTMLElement[];
     backgrounds.forEach((el) => (el.inert = true));
@@ -436,16 +510,11 @@ export default function Nimbus() {
             (showcase !== "parceiros" || (!p.demo && !p.owned)) &&
             (!free || p.price === 0) &&
             (view !== "favoritos" || favorites.includes(p.id)) &&
-            `${p.title} ${p.subject} ${p.author} ${p.category} ${p.course} ${p.topic || ""}`
-              .toLocaleLowerCase("pt-BR")
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .includes(
-                query
-                  .toLocaleLowerCase("pt-BR")
-                  .normalize("NFD")
-                  .replace(/[\u0300-\u036f]/g, ""),
-              ),
+            (!preferredTopics.length || preferredTopics.includes(p.subject)) &&
+            searchMatches(
+              `${p.title} ${p.subject} ${p.author} ${p.category} ${p.course} ${p.topic || ""}`,
+              query,
+            ),
         )
         .sort((a, b) =>
           showcase === "avaliados"
@@ -463,6 +532,7 @@ export default function Nimbus() {
         ),
     [
       products,
+      preferredTopics,
       category,
       format,
       free,
@@ -577,6 +647,20 @@ export default function Nimbus() {
             <h3>{p.title}</h3>
           </button>
           <p className="author-line">{p.author}</p>
+          <button
+            className="text-link compare-button"
+            onClick={() =>
+              setCompared((old) =>
+                old.includes(p.id)
+                  ? old.filter((x) => x !== p.id)
+                  : old.length < 3
+                    ? [...old, p.id]
+                    : old,
+              )
+            }
+          >
+            {compared.includes(p.id) ? "✓ Na comparação" : "Comparar material"}
+          </button>
           <div className="product-info">
             <span>
               <FileText size={13} />
@@ -698,7 +782,12 @@ export default function Nimbus() {
         </div>
       </header>
       {user && (
-        <WorkspaceNavigation view={view} admin={user.admin} onNavigate={go} />
+        <WorkspaceNavigation
+          view={view}
+          admin={user.admin}
+          staff={!!user.staff?.reviewer || !!user.staff?.support}
+          onNavigate={go}
+        />
       )}
       {user && workspaceFor(view) === "estudante" && (
         <div className="account-nav">
@@ -750,6 +839,24 @@ export default function Nimbus() {
               className={view === "correcoes" ? "active" : ""}
             >
               Minhas correções
+            </button>
+            <button
+              onClick={() => go("licencas")}
+              className={view === "licencas" ? "active" : ""}
+            >
+              Licenças e presentes
+            </button>
+            <button
+              onClick={() => go("assinaturas")}
+              className={view === "assinaturas" ? "active" : ""}
+            >
+              Assinaturas
+            </button>
+            <button
+              onClick={() => go("servicos")}
+              className={view === "servicos" ? "active" : ""}
+            >
+              Encontros e serviços
             </button>
           </div>
         </div>
@@ -1112,6 +1219,70 @@ export default function Nimbus() {
             </section>
           </>
         )}
+        {view === "catalogo" && user && (
+          <div className="container catalog-tools">
+            <SavedFilters
+              filters={{
+                query,
+                category,
+                course,
+                subject,
+                topic,
+                format,
+                free,
+                level,
+                language,
+                fileType,
+                minPrice,
+                maxPrice,
+                updatedAfter,
+              }}
+              onLoad={(f) => {
+                if (typeof f.query === "string") setQuery(f.query);
+                if (
+                  typeof f.category === "string" &&
+                  categories.includes(f.category)
+                )
+                  setCategory(f.category);
+                if (typeof f.course === "string") setCourse(f.course);
+                if (typeof f.subject === "string") setSubject(f.subject);
+                if (typeof f.topic === "string") setTopic(f.topic);
+                if (typeof f.format === "string") setFormat(f.format);
+                setFree(f.free === true);
+                if (typeof f.level === "string") setLevel(f.level);
+                if (typeof f.language === "string") setLanguage(f.language);
+                if (typeof f.fileType === "string") setFileType(f.fileType);
+                if (typeof f.minPrice === "string") setMinPrice(f.minPrice);
+                if (typeof f.maxPrice === "string") setMaxPrice(f.maxPrice);
+                if (typeof f.updatedAfter === "string")
+                  setUpdatedAfter(f.updatedAfter);
+              }}
+            />
+            {user && (
+              <PreferredTopics
+                products={products}
+                onApply={setPreferredTopics}
+              />
+            )}
+          </div>
+        )}
+        {compared.length > 0 && (
+          <div className="container compare-summary">
+            <p>
+              {compared.length} de 3 materiais selecionados para comparação.
+            </p>
+            {compared.length >= 2 ? (
+              <MaterialComparison
+                products={products.filter((p) => compared.includes(p.id))}
+                onClose={() => setCompared([])}
+              />
+            ) : (
+              <button className="text-link" onClick={() => setCompared([])}>
+                Limpar seleção
+              </button>
+            )}
+          </div>
+        )}
         {(view === "catalogo" || view === "favoritos") && (
           <section className="container page-section">
             <div className="breadcrumb">
@@ -1390,7 +1561,17 @@ export default function Nimbus() {
                       </span>
                     </div>
                     <div className="product-grid catalog-grid">
-                      {visible.map((p, i) => renderCard(p, i))}
+                      {visible
+                        .slice(0, catalogLimit)
+                        .map((p, i) => renderCard(p, i))}
+                      {visible.length > catalogLimit && (
+                        <button
+                          className="btn secondary"
+                          onClick={() => setCatalogLimit(catalogLimit + 24)}
+                        >
+                          Mostrar mais materiais
+                        </button>
+                      )}
                     </div>
                     {visible.length === 0 && (
                       <Empty
@@ -1405,6 +1586,16 @@ export default function Nimbus() {
             )}
           </section>
         )}
+        {view === "licencas" &&
+          (user ? <LicensePanel /> : signedOut("Gerencie suas licenças"))}
+        {view === "assinaturas" && <SubscriptionPage signedIn={!!user} />}
+        {view === "servicos" && <ServicesPage signedIn={!!user} />}
+        {view === "equipe" &&
+          (user ? (
+            <StaffWorkspace roles={user.staff || {}} />
+          ) : (
+            signedOut("Área da equipe")
+          ))}
         {view === "gratuitos" && <FreeDownloads />}
         {view === "colecoes" && <CollectionsPanel />}
         {view === "interesses" && (
@@ -1477,14 +1668,78 @@ export default function Nimbus() {
                   <div>
                     <span>Materiais ({cartItems.length})</span>
                     <strong>
-                      {money(cartItems.reduce((s, p) => s + p.price, 0))}
+                      {money(
+                        cartItems.reduce((s, p) => s + p.price, 0) * seats,
+                      )}
                     </strong>
                   </div>
                   <div>
                     <span>Entrega digital</span>
                     <span>Na sua biblioteca</span>
                   </div>
-                  {user && <CouponInput ids={cart} onApplied={setCoupon} />}
+                  <div className="purchase-options">
+                    <label>
+                      Como deseja adquirir?
+                      <select
+                        value={purchaseMode}
+                        onChange={(e) => {
+                          setPurchaseMode(e.target.value);
+                          setSeats(e.target.value === "group" ? 2 : 1);
+                          setCoupon(null);
+                        }}
+                      >
+                        <option value="individual">Para mim</option>
+                        <option value="group">
+                          Licenças para uma turma ou grupo
+                        </option>
+                        <option value="gift">Presentear outra pessoa</option>
+                      </select>
+                    </label>
+                    {purchaseMode === "group" && (
+                      <label>
+                        Quantidade de licenças
+                        <input
+                          type="number"
+                          min={2}
+                          max={100}
+                          value={seats}
+                          onChange={(e) => {
+                            const n = Number(e.target.value);
+                            if (Number.isInteger(n) && n >= 2 && n <= 100) {
+                              setSeats(n);
+                              setCoupon(null);
+                            }
+                          }}
+                        />
+                        <small>
+                          Uma licença fica com você; distribua as demais por
+                          e-mail após confirmação.
+                        </small>
+                      </label>
+                    )}
+                    {purchaseMode === "gift" && (
+                      <label>
+                        E-mail do destinatário
+                        <input
+                          type="email"
+                          value={giftEmail}
+                          maxLength={200}
+                          onChange={(e) => setGiftEmail(e.target.value)}
+                        />
+                        <small>
+                          O acesso será vinculado quando o destinatário entrar
+                          com esse e-mail verificado.
+                        </small>
+                      </label>
+                    )}
+                  </div>
+                  {user && (
+                    <CouponInput
+                      ids={cart}
+                      seats={seats}
+                      onApplied={setCoupon}
+                    />
+                  )}
                   {coupon && (
                     <div>
                       <span>Desconto · {coupon.code}</span>
@@ -1496,7 +1751,7 @@ export default function Nimbus() {
                     <strong>
                       {money(
                         coupon?.total ??
-                          cartItems.reduce((s, p) => s + p.price, 0),
+                          cartItems.reduce((s, p) => s + p.price, 0) * seats,
                       )}
                     </strong>
                   </div>
@@ -1530,6 +1785,8 @@ export default function Nimbus() {
                       disabled={
                         busy ||
                         !accepted ||
+                        (purchaseMode === "gift" &&
+                          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(giftEmail)) ||
                         cartItems.some(
                           (p) =>
                             p.price > 0 &&
@@ -1542,13 +1799,22 @@ export default function Nimbus() {
                             "nimbus-checkout:" +
                             cart.toSorted().join(",") +
                             ":" +
-                            (coupon?.code || "");
+                            (coupon?.code || "") +
+                            ":" +
+                            seats +
+                            ":" +
+                            (purchaseMode === "gift"
+                              ? giftEmail.toLowerCase()
+                              : "");
                           let request_id = sessionStorage.getItem(key);
                           if (!request_id) {
                             request_id = crypto.randomUUID();
                             sessionStorage.setItem(key, request_id);
                           }
                           const result = await api("checkout", {
+                            seats,
+                            gift_email:
+                              purchaseMode === "gift" ? giftEmail : undefined,
                             coupon: coupon?.code,
                             ids: cart,
                             accepted,
@@ -1559,8 +1825,18 @@ export default function Nimbus() {
                             return;
                           }
                           setCart([]);
-                          notify("Material disponível na sua biblioteca!");
-                          go("biblioteca");
+                          notify(
+                            purchaseMode === "gift"
+                              ? "Presente preparado. O destinatário acessará pela própria conta."
+                              : seats > 1
+                                ? "Licenças disponíveis para distribuição."
+                                : "Material disponível na sua biblioteca!",
+                          );
+                          go(
+                            purchaseMode === "gift" || seats > 1
+                              ? "licencas"
+                              : "biblioteca",
+                          );
                         })
                       }
                     >
@@ -1676,10 +1952,29 @@ export default function Nimbus() {
                     onChange={(e) => setLibraryQuery(e.target.value)}
                   />
                 </div>
+                <LibraryFilters
+                  states={organization.states}
+                  folder={organization.folder}
+                  status={organization.status}
+                  onFolder={organization.setFolder}
+                  onStatus={organization.setStatus}
+                />
                 <h2 className="subheading">Continue de onde parou</h2>
                 {library.length ? (
                   <div className="library-grid">
                     {library
+                      .filter((item) => {
+                        const state = organization.states.find(
+                          (s) => s.product_id === item.product_id,
+                        );
+                        return (
+                          (!organization.folder ||
+                            state?.folder === organization.folder) &&
+                          (!organization.status ||
+                            (state?.status || "not_started") ===
+                              organization.status)
+                        );
+                      })
                       .filter((item) => {
                         const p = products.find(
                           (p) => p.id === item.product_id,
@@ -1795,6 +2090,7 @@ export default function Nimbus() {
                         <strong>Total</strong>
                         <strong>{money(o.total)}</strong>
                       </div>
+                      <OrderTools order={o} />
                       {o.status === "paid" && (
                         <button
                           className="text-link"
@@ -1942,6 +2238,24 @@ export default function Nimbus() {
                     {adminTab === "resumo" && (
                       <AdminOverview onNavigate={go} name={user.name} />
                     )}
+                    {adminTab === "relatórios" && <ManagementPanel />}
+                    {adminTab === "melhorias" && <RoadmapPanel />}
+                    {adminTab === "tarefas" && <OperationsTasks />}
+                    {adminTab === "reembolsos" && <RefundAdmin />}
+                    {adminTab === "perguntas" && (
+                      <ModerationPanel kind="questions" />
+                    )}
+                    {adminTab === "denúncias" && (
+                      <ModerationPanel kind="reports" />
+                    )}
+                    {adminTab === "alertas" && (
+                      <ModerationPanel kind="events" />
+                    )}
+                    {adminTab === "equipe" && <StaffRolesPanel />}
+                    {adminTab === "planos" && <SubscriptionAdmin />}
+                    {adminTab === "serviços" && <ServicesAdmin />}
+                    {adminTab === "avaliações" && <ReviewModeration admin />}
+                    {adminTab === "verificações" && <VerificationPanel />}
                     {adminTab === "ideias" && <CommercialPlan />}
                     {adminTab === "cupons" && <CouponsAdmin />}
                     {adminTab === "coleções" && <CollectionsAdmin />}
@@ -1955,7 +2269,14 @@ export default function Nimbus() {
                       <EditorialPanel
                         products={admin.products}
                         onRefresh={async () => {
-                          setAdmin(await api("admin"));
+                          setAdmin(
+                            await api(
+                              "admin?section=" +
+                                encodeURIComponent(adminTab) +
+                                "&page=" +
+                                adminPage,
+                            ),
+                          );
                           await loadCatalog();
                         }}
                       />
@@ -2049,7 +2370,14 @@ export default function Nimbus() {
                                                   ? "draft"
                                                   : "published",
                                             });
-                                            setAdmin(await api("admin"));
+                                            setAdmin(
+                                              await api(
+                                                "admin?section=" +
+                                                  encodeURIComponent(adminTab) +
+                                                  "&page=" +
+                                                  adminPage,
+                                              ),
+                                            );
                                             await loadCatalog();
                                             notify("Status atualizado.");
                                           })
@@ -2069,7 +2397,14 @@ export default function Nimbus() {
                                               id: p.id,
                                               status: "rejected",
                                             });
-                                            setAdmin(await api("admin"));
+                                            setAdmin(
+                                              await api(
+                                                "admin?section=" +
+                                                  encodeURIComponent(adminTab) +
+                                                  "&page=" +
+                                                  adminPage,
+                                              ),
+                                            );
                                             notify("Material rejeitado.");
                                           })
                                         }
@@ -2156,7 +2491,14 @@ export default function Nimbus() {
                                   id: t.id,
                                   response: data.get("response"),
                                 });
-                                setAdmin(await api("admin"));
+                                setAdmin(
+                                  await api(
+                                    "admin?section=" +
+                                      encodeURIComponent(adminTab) +
+                                      "&page=" +
+                                      adminPage,
+                                  ),
+                                );
                                 notify("Resposta registrada.");
                               });
                             }}
@@ -2224,6 +2566,37 @@ export default function Nimbus() {
                     )}
                   </div>
                 </div>
+                {admin.pagination &&
+                  admin.pagination.total > admin.pagination.limit && (
+                    <nav
+                      className="pagination-controls"
+                      aria-label="Paginação administrativa"
+                    >
+                      <button
+                        className="btn secondary small"
+                        disabled={adminPage <= 1}
+                        onClick={() => setAdminPage(adminPage - 1)}
+                      >
+                        Anterior
+                      </button>
+                      <span>
+                        Página {adminPage} de{" "}
+                        {Math.ceil(
+                          admin.pagination.total / admin.pagination.limit,
+                        )}
+                      </span>
+                      <button
+                        className="btn secondary small"
+                        disabled={
+                          adminPage * admin.pagination.limit >=
+                          admin.pagination.total
+                        }
+                        onClick={() => setAdminPage(adminPage + 1)}
+                      >
+                        Próxima
+                      </button>
+                    </nav>
+                  )}
               </>
             ) : (
               <div className="loading">
@@ -2523,6 +2896,10 @@ export default function Nimbus() {
           </section>
         )}
         {![
+          "licencas",
+          "assinaturas",
+          "servicos",
+          "equipe",
           "conta",
           "gratuitos",
           "colecoes",
@@ -2588,6 +2965,8 @@ export default function Nimbus() {
             </button>
             <button onClick={() => go("interesses")}>Sugira um material</button>
             <button onClick={() => go("correcoes")}>Minhas correções</button>
+            <button onClick={() => go("assinaturas")}>Planos e clubes</button>
+            <button onClick={() => go("servicos")}>Encontros e serviços</button>
             <button onClick={() => go("biblioteca")}>Minha biblioteca</button>
           </div>
           <div>
@@ -2745,21 +3124,11 @@ export default function Nimbus() {
                 </a>
               )}
               <pre>{detail.preview}</pre>
-              {Array.from({ length: detail.preview_count || 0 }, (_, i) => (
-                <details
-                  key={i}
-                  onToggle={(e) => {
-                    if (e.currentTarget.open) metric(detail.id, "preview");
-                  }}
-                >
-                  <summary>Página de prévia {i + 1}</summary>
-                  <img
-                    className="material-preview"
-                    src={"/api/asset/" + detail.id + "/preview/" + i}
-                    alt={"Prévia " + (i + 1) + " de " + detail.title}
-                  />
-                </details>
-              ))}
+              <PreviewGallery
+                id={detail.id}
+                count={detail.preview_count || 0}
+                title={detail.title}
+              />
               {detail.objectives && (
                 <>
                   <h3>O que você vai aprender</h3>
@@ -2785,6 +3154,9 @@ export default function Nimbus() {
                 </p>
               )}
             </div>
+            <ProductInformation product={detail} />
+            {detail.author_slug && <FollowAuthor slug={detail.author_slug} />}
+            <RelatedMaterials productId={detail.id} />
             <div className="detail-reviews">
               <h3>
                 Avaliações de compradores{" "}
@@ -2799,6 +3171,17 @@ export default function Nimbus() {
                       {"☆".repeat(5 - r.rating)}
                     </span>
                     <p>{r.comment}</p>
+                    {r.clarity && (
+                      <small>
+                        Clareza: {r.clarity}/5 · Apresentação:{" "}
+                        {r.presentation || "—"}/5
+                      </small>
+                    )}
+                    {r.response && (
+                      <p className="notice">
+                        Resposta da autoria/operação: {r.response}
+                      </p>
+                    )}
                     <small>Compra confirmada · {date(r.created)}</small>
                   </div>
                 ))
@@ -2813,7 +3196,13 @@ export default function Nimbus() {
                   onSubmit={(e) => {
                     e.preventDefault();
                     action(async () => {
-                      await api("reviews", { id: detail.id, rating, comment });
+                      await api("reviews", {
+                        id: detail.id,
+                        rating,
+                        comment,
+                        clarity: clarityRating,
+                        presentation: presentationRating,
+                      });
                       setReviews(
                         (await api("reviews?id=" + detail.id)).reviews,
                       );
@@ -2837,6 +3226,38 @@ export default function Nimbus() {
                       ))}
                     </select>
                   </label>
+                  <div className="form-row">
+                    <label>
+                      Clareza
+                      <select
+                        value={clarityRating}
+                        onChange={(e) =>
+                          setClarityRating(Number(e.target.value))
+                        }
+                      >
+                        {[5, 4, 3, 2, 1].map((n) => (
+                          <option key={n} value={n}>
+                            {n}/5
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Apresentação
+                      <select
+                        value={presentationRating}
+                        onChange={(e) =>
+                          setPresentationRating(Number(e.target.value))
+                        }
+                      >
+                        {[5, 4, 3, 2, 1].map((n) => (
+                          <option key={n} value={n}>
+                            {n}/5
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                   <label>
                     Comentário
                     <textarea
@@ -2884,6 +3305,18 @@ export default function Nimbus() {
             >
               <Download size={17} /> Baixar meu arquivo
             </button>
+            <LearningExperience productId={reader.product_id} />
+            {(reader.file_name?.toLowerCase().endsWith(".pdf") ||
+              products.find((p) => p.id === reader.product_id)
+                ?.public_download) && (
+              <PdfReader productId={reader.product_id} />
+            )}
+            <StudyOrganization
+              productId={reader.product_id}
+              onSaved={() => {
+                organization.refresh();
+              }}
+            />
             <VersionList productId={reader.product_id} />
             <CommunityPanel kind="issues" productId={reader.product_id} />
             {reader.file_name ? (

@@ -1,5 +1,18 @@
+import { publicationNotices } from "@/lib/publication-notices";
+import { management } from "@/lib/management";
 import { freeGuides } from "@/lib/free-guides";
 import { growth, couponQuote } from "@/lib/growth";
+import { editorialPlus } from "@/lib/editorial-plus";
+import { releaseDuePublications } from "@/lib/publication-schedule";
+import { subscriptionRoutes, syncSubscriptionEvent } from "@/lib/subscriptions";
+import { serviceRoutes, syncServiceEvent } from "@/lib/services";
+import { licenses, claimLicenses, orderAccess } from "@/lib/licenses";
+import { staff } from "@/lib/staff";
+import { learningProducts, hasPackage } from "@/lib/learning-products";
+import { learning } from "@/lib/learning";
+import { discovery } from "@/lib/discovery";
+import { operationsPlus, syncRefundEvent } from "@/lib/operations-plus";
+import { rate as limitRate, audit as featureAudit } from "@/lib/feature-db";
 import { extension } from "@/lib/extensions";
 import { emailIdentity } from "@/lib/identity";
 import {
@@ -7,6 +20,7 @@ import {
   entitlement,
   validateBundle,
   type RichProduct,
+  publicDTO,
 } from "@/lib/catalog-services";
 import { notify, deliver, purchaseNotice } from "@/lib/notifications";
 import {
@@ -53,7 +67,12 @@ function fail(message: string, status = 400): never {
   throw Object.assign(new Error(message), { status });
 }
 type Body = {
+  seats?: number;
+  gift_email?: string;
   coupon?: string;
+  review_checks?: string[];
+  clarity?: number;
+  presentation?: number;
   reviewed?: boolean;
   feedback?: string;
   controller?: string;
@@ -158,6 +177,20 @@ async function auth(req: Request) {
     user!.name,
     now(),
   );
+  await claimLicenses(runtime(), user);
+  const route = new URL(req.url).pathname;
+  if (
+    route.startsWith("/api/download/") ||
+    route.startsWith("/api/version-download/")
+  )
+    await limitRate(runtime(), user.id, "downloads", 40);
+  if (
+    req.method === "POST" &&
+    ["/api/upload", "/api/checkout", "/api/tickets", "/api/reviews"].includes(
+      route,
+    )
+  )
+    await limitRate(runtime(), user.id, route, 20);
   return user!;
 }
 async function admin(req: Request) {
@@ -176,6 +209,7 @@ async function log(user: string, action: string, target: string) {
   );
 }
 async function catalog() {
+  await releaseDuePublications(runtime());
   const db = await all<Product>(
     "SELECT p.*,u.author_slug FROM products p LEFT JOIN users u ON u.id=p.author_id",
   );
@@ -186,7 +220,7 @@ async function catalog() {
     rating: number;
     review_count: number;
   }>(
-    "SELECT product_id,AVG(rating) rating,COUNT(*) review_count FROM reviews GROUP BY product_id",
+    "SELECT r.product_id,AVG(r.rating) rating,COUNT(*) review_count FROM reviews r LEFT JOIN review_moderation m ON m.review_id=r.id WHERE COALESCE(m.status,'visible')='visible' GROUP BY r.product_id",
   );
   const ownership = await all<{ id: string; owned: number }>(
     "SELECT u.id,COALESCE(a.owned,CASE WHEN instr(?,','||lower(u.email)||',')>0 THEN 1 ELSE 0 END) owned FROM users u LEFT JOIN author_accounts a ON a.id=u.id",
@@ -202,6 +236,166 @@ async function catalog() {
 async function purchased(user: string, id: string) {
   return entitlement(runtime(), user, id);
 }
+async function moderateProduct(u: Awaited<ReturnType<typeof auth>>, b: Body) {
+  if (
+    !["published", "rejected", "draft", "changes_requested"].includes(b.status)
+  )
+    fail("Status inválido.");
+  const p = (await catalog()).find((p) => p.id === b.id);
+  if (p && b.status === "published") {
+    const terms = await policy(runtime(), p.author_id);
+    if (
+      p.accepted_bps !== (terms.owned ? 0 : terms.commission_bps) ||
+      p.accepted_owned !== terms.owned
+    )
+      fail("O autor deve aceitar as condições comerciais atuais.", 409);
+  }
+  if (
+    !p ||
+    p.demo ||
+    (!p.file_key &&
+      !bundleIds(p).length &&
+      !(await hasPackage(runtime(), p.id)))
+  )
+    fail("Apenas materiais reais com arquivo podem ser publicados.");
+  if (b.status === "published")
+    await validateBundle(runtime(), p.id, p.author_id, bundleIds(p));
+  const reviewer = (
+    await all<{ name: string; public_name: string }>(
+      "SELECT name,public_name FROM users WHERE id=?",
+      u.id,
+    )
+  )[0];
+  if (
+    b.reviewed === true &&
+    b.status === "published" &&
+    ((p.objectives || "").length < 10 || (p.sources || "").length < 10)
+  )
+    fail(
+      "Para registrar revisão, informe objetivos e referências no material.",
+    );
+  const schedule = (
+    await all<{ release_at: string }>(
+      "SELECT release_at FROM publication_schedule WHERE product_id=?",
+      p.id,
+    )
+  )[0];
+  const scheduled =
+    b.status === "published" && schedule && schedule.release_at > now();
+  if (scheduled)
+    await run(
+      "UPDATE publication_schedule SET approved=1 WHERE product_id=?",
+      p.id,
+    );
+  await run(
+    "UPDATE products SET status=?,reviewed_by=?,reviewed_at=? WHERE id=?",
+    scheduled ? "scheduled" : b.status,
+    b.reviewed === true && b.status === "published"
+      ? reviewer.public_name || reviewer.name
+      : null,
+    b.reviewed === true && b.status === "published" ? now() : null,
+    p.id,
+  );
+  if (b.status === "published" && !scheduled)
+    await run(
+      "UPDATE learning_packages SET published_cards=cards,published_questions=questions,published_lessons=lessons WHERE product_id=?",
+      p.id,
+    );
+  const feedback =
+    clean(b.feedback, 5000) ||
+    (b.status === "published"
+      ? "Material aprovado para publicação."
+      : "Consulte a administração para orientações.");
+  await run(
+    "INSERT INTO editorial_events(id,product_id,action,feedback,reviewer,checks,created) VALUES(?,?,?,?,?,?,?)",
+    uid(),
+    p.id,
+    b.status,
+    feedback,
+    reviewer.name,
+    JSON.stringify(
+      Array.isArray(b.review_checks)
+        ? b.review_checks.filter((x) =>
+            [
+              "content",
+              "sources",
+              "legibility",
+              "examples",
+              "answers",
+              "rights",
+            ].includes(x),
+          )
+        : [],
+    ),
+    now(),
+  );
+  const noteId = "editorial:" + uid();
+  await notify(
+    runtime(),
+    noteId,
+    p.author_id,
+    scheduled
+      ? "Material agendado"
+      : b.status === "published"
+        ? "Material publicado"
+        : "Retorno sobre seu material",
+    p.title + " — " + feedback,
+    "/#autores",
+  );
+  await deliver(runtime(), noteId);
+  if (b.status === "published" && !scheduled && p.file_key) {
+    const versions = await all<{ id: string; sequence: number }>(
+      "SELECT id,sequence FROM product_versions WHERE product_id=? AND file_key=? AND status='pending'",
+      p.id,
+      p.file_key,
+    );
+    await run(
+      "UPDATE product_versions SET status='published',released=? WHERE product_id=? AND file_key=?",
+      now(),
+      p.id,
+      p.file_key,
+    );
+    if (versions.length)
+      await publicationNotices(
+        runtime(),
+        p,
+        String(versions[0].id),
+        true,
+        false,
+      );
+  }
+  if (b.status === "published" && !scheduled)
+    await publicationNotices(runtime(), p, p.updated);
+
+  await log(u.id, `product.${b.status}`, p.id);
+}
+async function respondTicket(u: Awaited<ReturnType<typeof auth>>, b: Body) {
+  await run(
+    "UPDATE tickets SET response=?,status=? WHERE id=?",
+    clean(b.response, 5000),
+    "closed",
+    clean(b.id, 100),
+  );
+  const owner = (
+    await all<{ user_id: string }>(
+      "SELECT user_id FROM tickets WHERE id=?",
+      clean(b.id, 100),
+    )
+  )[0];
+  if (owner) {
+    const id = "support:" + uid();
+    await notify(
+      runtime(),
+      id,
+      owner.user_id,
+      "Resposta do suporte",
+      "Sua solicitação recebeu uma resposta. Consulte o atendimento na Nimbus.",
+      "/#suporte",
+    );
+    await deliver(runtime(), id);
+  }
+  await log(u.id, "ticket.responded", clean(b.id, 100));
+}
 async function dispatch(req: Request) {
   const url = new URL(req.url);
   const path = url.pathname.slice(5).split("/").filter(Boolean);
@@ -211,6 +405,21 @@ async function dispatch(req: Request) {
     const origin = req.headers.get("origin");
     if (!origin || origin !== url.origin)
       fail("Origem da solicitação inválida.", 403);
+  }
+  for (const handler of [
+    management,
+    learning,
+    discovery,
+    operationsPlus,
+    learningProducts,
+    staff,
+    licenses,
+    subscriptionRoutes,
+    serviceRoutes,
+    editorialPlus,
+  ]) {
+    const result = await handler(req, runtime(), auth);
+    if (result) return result;
   }
   const grown = await growth(req, runtime(), auth);
   if (grown) return grown;
@@ -289,6 +498,71 @@ async function dispatch(req: Request) {
         u.id,
       ),
       finances: await financialReport(runtime(), u.id),
+      reader_states: await all(
+        "SELECT * FROM reader_states WHERE user_id=?",
+        u.id,
+      ),
+      page_annotations: await all(
+        "SELECT * FROM page_annotations WHERE user_id=?",
+        u.id,
+      ),
+      saved_searches: await all(
+        "SELECT * FROM saved_searches WHERE user_id=?",
+        u.id,
+      ),
+      author_follows: await all(
+        "SELECT * FROM author_follows WHERE user_id=?",
+        u.id,
+      ),
+      preferences: await all(
+        "SELECT * FROM student_preferences WHERE user_id=?",
+        u.id,
+      ),
+      drafts: await all("SELECT * FROM author_drafts WHERE user_id=?", u.id),
+      questions: await all(
+        "SELECT * FROM product_questions WHERE user_id=?",
+        u.id,
+      ),
+      refund_requests: await all(
+        "SELECT id,order_id,reason,status,response,amount,created,updated FROM refund_requests WHERE user_id=?",
+        u.id,
+      ),
+      quality_reports: await all(
+        "SELECT * FROM quality_reports WHERE user_id=?",
+        u.id,
+      ),
+      lesson_progress: await all(
+        "SELECT * FROM lesson_progress WHERE user_id=?",
+        u.id,
+      ),
+      card_reviews: await all(
+        "SELECT * FROM card_reviews WHERE user_id=?",
+        u.id,
+      ),
+      quiz_attempts: await all(
+        "SELECT * FROM quiz_attempts WHERE user_id=?",
+        u.id,
+      ),
+      bookings: await all(
+        "SELECT id,offer_id,slot_id,status,price,created FROM service_bookings WHERE user_id=?",
+        u.id,
+      ),
+      quotes: await all(
+        "SELECT id,offer_id,brief,status,price,response,payment_status,created,updated FROM service_quotes WHERE user_id=?",
+        u.id,
+      ),
+      subscriptions: await all(
+        "SELECT id,plan_id,product_ids,status,expires,created FROM subscriptions WHERE user_id=?",
+        u.id,
+      ),
+      received_licenses: await all(
+        "SELECT order_id,email,created FROM license_invites WHERE user_id=?",
+        u.id,
+      ),
+      sent_licenses: await all(
+        "SELECT li.order_id,li.email,li.created FROM license_invites li JOIN orders o ON o.id=li.order_id WHERE o.user_id=?",
+        u.id,
+      ),
     };
     return new Response(JSON.stringify(data, null, 2), {
       headers: {
@@ -404,7 +678,17 @@ async function dispatch(req: Request) {
       u.id,
     );
     return json({
-      user: { ...profile, admin: u.admin },
+      user: {
+        ...profile,
+        admin: u.admin,
+        staff:
+          (
+            await all(
+              "SELECT reviewer,support FROM staff_roles WHERE user_id=?",
+              u.id,
+            )
+          )[0] || {},
+      },
       favorites: favorites.map((f) => f.product_id),
     });
   }
@@ -479,6 +763,17 @@ async function dispatch(req: Request) {
         409,
       );
     }
+    const seats = Number(b.seats || 1),
+      giftEmail = clean(b.gift_email, 200).toLowerCase();
+    if (!Number.isSafeInteger(seats) || seats < 1 || seats > 100)
+      fail("Escolha de 1 a 100 licenças.");
+    if (
+      giftEmail &&
+      (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(giftEmail) ||
+        seats !== 1 ||
+        giftEmail === u.email.toLowerCase())
+    )
+      fail("Presente exige uma licença e o e-mail de outra pessoa.");
     const ids = parseCart(b.ids);
     const products = await catalog();
     const selected = ids.map(
@@ -500,15 +795,19 @@ async function dispatch(req: Request) {
         if (ids.includes(child.id) || included.has(child.id))
           fail("Há materiais repetidos entre os kits e o carrinho.", 409);
         included.add(child.id);
-        if (await purchased(u.id, child.id))
+        if (!giftEmail && (await purchased(u.id, child.id)))
           fail(`Você já possui um material deste kit: ${child.title}`, 409);
       }
     }
     for (const p of selected) {
-      if (await purchased(u.id, p.id)) fail(`Você já possui: ${p.title}`, 409);
+      if (!giftEmail && (await purchased(u.id, p.id)))
+        fail(`Você já possui: ${p.title}`, 409);
       if (
         p.price > 0 &&
-        (p.demo || (!p.file_key && !bundleMap.get(p.id)?.length))
+        (p.demo ||
+          (!p.file_key &&
+            !bundleMap.get(p.id)?.length &&
+            !(await hasPackage(runtime(), p.id))))
       )
         fail("Este material é demonstrativo e ainda não está à venda.", 409);
       if (p.file_key && !(await BUCKET.head(p.file_key)))
@@ -532,13 +831,17 @@ async function dispatch(req: Request) {
       ? await couponQuote(
           runtime(),
           b.coupon,
-          selected.map((p) => ({ ...p, owned: policies.get(p.id)!.owned })),
+          selected.map((p) => ({
+            ...p,
+            price: p.price * seats,
+            owned: policies.get(p.id)!.owned,
+          })),
           u.id,
         )
       : null;
     const priced = selected.map((p) => ({
       ...p,
-      price: quote?.amounts.get(p.id) ?? p.price,
+      price: quote?.amounts.get(p.id) ?? p.price * seats,
     }));
     const total = priced.reduce((s, p) => s + p.price, 0);
     if (total > 0 && !runtime().STRIPE_SECRET_KEY)
@@ -558,6 +861,8 @@ async function dispatch(req: Request) {
         total,
         coupon: quote?.code,
         discount: quote?.discount,
+        seats,
+        giftEmail,
       }),
       now(),
     );
@@ -565,6 +870,20 @@ async function dispatch(req: Request) {
       DB.prepare(
         "INSERT INTO orders (id,user_id,status,total,created) VALUES(?,?,?,?,?)",
       ).bind(id, u.id, total === 0 ? "paid" : "pending", total, now()),
+      ...(seats > 1 || giftEmail
+        ? [
+            DB.prepare(
+              "INSERT INTO order_licenses(order_id,seats,gift) VALUES(?,?,?)",
+            ).bind(id, seats, giftEmail ? 1 : 0),
+          ]
+        : []),
+      ...(giftEmail
+        ? [
+            DB.prepare(
+              "INSERT INTO license_invites(id,order_id,email,created) VALUES(?,?,?,?)",
+            ).bind(uid(), id, giftEmail, now()),
+          ]
+        : []),
       ...priced.map((p) =>
         DB.prepare(
           "INSERT INTO order_items (id,order_id,product_id,price,title,file_key,file_name,content,author_id,commission_bps,owned,policy_version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -622,7 +941,7 @@ async function dispatch(req: Request) {
     }
     const form = new URLSearchParams({
       mode: "payment",
-      success_url: `${url.origin}/?payment=success&order=${id}#biblioteca`,
+      success_url: `${url.origin}/?payment=success&order=${id}#${giftEmail || seats > 1 ? "licencas" : "biblioteca"}`,
       cancel_url: `${url.origin}/?payment=cancelled#carrinho`,
       "metadata[order_id]": id,
       client_reference_id: id,
@@ -673,6 +992,9 @@ async function dispatch(req: Request) {
       fail("Assinatura inválida.", 400);
     const event = JSON.parse(raw),
       s = event.data?.object;
+    await syncRefundEvent(runtime(), event);
+    await syncSubscriptionEvent(runtime(), event);
+    await syncServiceEvent(runtime(), event);
     const order = (
       await all<{ id: string; total: number; status: string }>(
         "SELECT * FROM orders WHERE id=? AND session_id=?",
@@ -784,7 +1106,18 @@ async function dispatch(req: Request) {
           order.id,
         )
       )[0];
-      await purchaseNotice(runtime(), order.id, owner.user_id);
+      if (s.metadata?.nimbus_service_kind) {
+        const id = "service-paid:" + order.id;
+        await notify(
+          runtime(),
+          id,
+          owner.user_id,
+          "Serviço confirmado",
+          "Seu pagamento foi confirmado. Acompanhe encontros e entregas na área Serviços.",
+          "/#servicos",
+        );
+        await deliver(runtime(), id);
+      } else await purchaseNotice(runtime(), order.id, owner.user_id);
     }
     if (typeof event.id === "string")
       await run(
@@ -798,10 +1131,18 @@ async function dispatch(req: Request) {
   if (path[0] === "library" && method === "GET") {
     const u = await auth(req);
     const items = await all(
-      "SELECT i.product_id,i.title,i.file_name,o.created,o.id order_id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE o.user_id=? AND o.status='paid' AND NOT EXISTS(SELECT 1 FROM order_assets a WHERE a.order_id=o.id AND a.parent_id=i.product_id) UNION ALL SELECT a.product_id,a.title,a.file_name,o.created,o.id order_id FROM order_assets a JOIN orders o ON o.id=a.order_id WHERE o.user_id=? AND o.status='paid' ORDER BY created DESC",
+      `SELECT i.product_id,i.title,i.file_name,o.created,o.id order_id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE ${orderAccess} AND o.status='paid' AND i.product_id NOT LIKE 'service:%' AND NOT EXISTS(SELECT 1 FROM order_assets a WHERE a.order_id=o.id AND a.parent_id=i.product_id) UNION ALL SELECT a.product_id,a.title,a.file_name,o.created,o.id order_id FROM order_assets a JOIN orders o ON o.id=a.order_id WHERE ${orderAccess} AND o.status='paid' ORDER BY created DESC`,
+      u.id,
+      u.id,
       u.id,
       u.id,
     );
+    const subscribed = await all(
+      "SELECT json_extract(a.value,'$.product_id') product_id,json_extract(a.value,'$.title') title,json_extract(a.value,'$.file_name') file_name,s.created,'subscription:'||s.id order_id FROM subscriptions s,json_each(s.assets) a WHERE s.user_id=? AND s.status='active' AND s.expires>?",
+      u.id,
+      now(),
+    );
+    items.push(...subscribed);
     const progress = await all("SELECT * FROM study WHERE user_id=?", u.id);
     return json({
       items: items
@@ -882,7 +1223,7 @@ async function dispatch(req: Request) {
   if (path[0] === "reviews" && method === "GET")
     return json({
       reviews: await all(
-        "SELECT rating,comment,name,created FROM reviews WHERE product_id=? ORDER BY created DESC",
+        "SELECT r.rating,r.comment,r.name,r.created,m.clarity,m.presentation,m.response FROM reviews r LEFT JOIN review_moderation m ON m.review_id=r.id WHERE r.product_id=? AND COALESCE(m.status,'visible')='visible' ORDER BY r.created DESC",
         url.searchParams.get("id") || "",
       ),
     });
@@ -894,6 +1235,12 @@ async function dispatch(req: Request) {
       fail("Apenas compradores podem avaliar.", 403);
     if (!Number.isInteger(b.rating) || b.rating < 1 || b.rating > 5)
       fail("Avaliação inválida.");
+    for (const value of [b.clarity, b.presentation])
+      if (
+        value !== undefined &&
+        (!Number.isInteger(value) || value < 1 || value > 5)
+      )
+        fail("Avaliação por critério inválida.");
     const comment = clean(b.comment, 2000);
     if (comment.length < 10) fail("Escreva ao menos 10 caracteres.");
     const profile = (await all("SELECT name FROM users WHERE id=?", u.id))[0];
@@ -905,6 +1252,13 @@ async function dispatch(req: Request) {
       b.rating,
       comment,
       profile.name,
+      now(),
+    );
+    await run(
+      "INSERT INTO review_moderation(review_id,clarity,presentation,updated) VALUES(?,?,?,?) ON CONFLICT(review_id) DO UPDATE SET clarity=excluded.clarity,presentation=excluded.presentation,updated=excluded.updated",
+      `${u.id}:${id}`,
+      b.clarity || null,
+      b.presentation || null,
       now(),
     );
     return json({ ok: true });
@@ -954,6 +1308,32 @@ async function dispatch(req: Request) {
     }
     if (method === "POST") {
       const b = await body(req);
+      if (b.id) {
+        const previous = (
+          await all<Product>(
+            "SELECT * FROM products WHERE id=? AND author_id=?",
+            b.id,
+            u.id,
+          )
+        )[0];
+        if (previous)
+          await run(
+            "INSERT INTO product_changes(id,product_id,actor,snapshot,created) VALUES(?,?,?,?,?)",
+            uid(),
+            b.id,
+            u.id,
+            JSON.stringify({
+              title: previous.title,
+              description: previous.description,
+              price: previous.price,
+              preview: previous.preview,
+              objectives: previous.objectives,
+              toc: previous.toc,
+              sources: previous.sources,
+            }),
+            now(),
+          );
+      }
       validProduct({ ...b });
       const terms = await policy(runtime(), u.id);
       if (
@@ -1112,6 +1492,62 @@ async function dispatch(req: Request) {
       new TextDecoder().decode(buffer.slice(0, 5)) !== "%PDF-"
     )
       fail("Arquivo PDF inválido.");
+    const ext = file.name.split(".").pop()?.toUpperCase() || "";
+    const bytes = new Uint8Array(buffer);
+    const textHeader = new TextDecoder().decode(buffer.slice(0, 1024));
+    if (
+      ["ZIP", "DOCX", "XLSX", "PPTX"].includes(ext) &&
+      !(bytes[0] === 80 && bytes[1] === 75)
+    )
+      fail("O arquivo não corresponde ao formato informado.");
+    if (
+      ext === "PNG" &&
+      !(
+        bytes[0] === 137 &&
+        bytes[1] === 80 &&
+        bytes[2] === 78 &&
+        bytes[3] === 71
+      )
+    )
+      fail("PNG inválido.");
+    if (
+      ["JPG", "JPEG"].includes(ext) &&
+      !(bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255)
+    )
+      fail("JPEG inválido.");
+    if (
+      ["TXT", "CSV"].includes(ext) &&
+      (/<script|<html|<iframe/i.test(textHeader) ||
+        bytes.slice(0, 1024).some((x) => x === 0))
+    )
+      fail("Arquivo de texto inválido.");
+    const hash = Array.from(
+      new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)),
+    )
+      .map((x) => x.toString(16).padStart(2, "0"))
+      .join("");
+    const matches = await all<{ product_id: string }>(
+      "SELECT product_id FROM upload_checks WHERE hash=? AND product_id!=?",
+      hash,
+      id,
+    );
+    await run(
+      "INSERT INTO upload_checks(product_id,hash,size,extension,result,created) VALUES(?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET hash=excluded.hash,size=excluded.size,extension=excluded.extension,result=excluded.result,created=excluded.created",
+      id,
+      hash,
+      file.size,
+      ext,
+      matches.length ? "duplicate_detected" : "signature_checked",
+      now(),
+    );
+    if (matches.length)
+      await run(
+        "INSERT INTO operation_events(id,kind,message,created) VALUES(?,?,?,?)",
+        uid(),
+        "duplicate_upload",
+        "Arquivo repetido detectado para análise editorial. Material " + id,
+        now(),
+      );
     const key = `materials/${id}/${uid()}.${file.name.split(".").pop()?.toLowerCase()}`;
     await BUCKET.put(key, buffer, {
       httpMetadata: { contentType: fileMime(file.name) },
@@ -1219,9 +1655,129 @@ async function dispatch(req: Request) {
     } else fail("Ação inválida.");
     return json({ ok: true });
   }
+  if (["staff-review", "staff-support", "review-file"].includes(path[0])) {
+    const u = await auth(req),
+      role = (
+        await all<{ reviewer: number; support: number }>(
+          "SELECT reviewer,support FROM staff_roles WHERE user_id=?",
+          u.id,
+        )
+      )[0];
+    const review = path[0] !== "staff-support";
+    if (!u.admin && !(review ? role?.reviewer : role?.support))
+      fail("Acesso restrito a esta função.", 403);
+    if (path[0] === "review-file") {
+      const p = (await catalog()).find((p) => p.id === path[1]);
+      if (!p?.file_key) fail("Arquivo não encontrado.", 404);
+      const file = await BUCKET.get(p.file_key);
+      if (!file) fail("Arquivo não encontrado.", 404);
+      return new Response(file.body, {
+        headers: {
+          "Content-Type": fileMime(p.file_name || "material.pdf"),
+          "Cache-Control": "private,no-store",
+          "Content-Disposition": 'attachment; filename="material-revisao"',
+        },
+      });
+    }
+    if (method === "GET")
+      return review
+        ? json({
+            products: (await catalog())
+              .filter(
+                (p) =>
+                  !p.demo &&
+                  ["draft", "pending", "changes_requested"].includes(p.status),
+              )
+              .map((p) => ({
+                ...publicDTO(p),
+                status: p.status,
+                author_id: p.author_id,
+                file_key: p.file_key ? "available" : null,
+                file_name: p.file_name,
+              })),
+          })
+        : json({
+            tickets: await all(
+              "SELECT id,subject,message,response,status,created FROM tickets ORDER BY created DESC LIMIT 100",
+            ),
+          });
+    const b = await body(req);
+    if (review) {
+      const p = (await catalog()).find((p) => p.id === b.id);
+      if (!u.admin && p?.author_id === u.id)
+        fail("A revisão de seu próprio material exige outro revisor.", 403);
+      await moderateProduct(u, { ...b, action: "product" });
+    } else await respondTicket(u, { ...b, action: "ticket" });
+    return json({ ok: true });
+  }
   if (path[0] === "admin") {
     const u = await admin(req);
     if (method === "GET") {
+      if (url.searchParams.has("section")) {
+        const section = url.searchParams.get("section") || "",
+          page = Math.max(
+            1,
+            Math.min(10000, Number(url.searchParams.get("page")) || 1),
+          ),
+          limit = 20;
+        const sources: Record<
+          string,
+          { key: string; sql: string; count: string }
+        > = {
+          produtos: {
+            key: "products",
+            sql: "SELECT p.*,u.author_slug FROM products p LEFT JOIN users u ON u.id=p.author_id ORDER BY p.created DESC",
+            count: "SELECT COUNT(*) n FROM products",
+          },
+          aprovações: {
+            key: "products",
+            sql: "SELECT p.*,u.author_slug FROM products p LEFT JOIN users u ON u.id=p.author_id WHERE p.demo=0 AND p.status IN ('draft','pending','changes_requested') ORDER BY p.created DESC",
+            count:
+              "SELECT COUNT(*) n FROM products WHERE demo=0 AND status IN ('draft','pending','changes_requested')",
+          },
+          pessoas: {
+            key: "users",
+            sql: "SELECT id,name,email,created FROM users ORDER BY created DESC",
+            count: "SELECT COUNT(*) n FROM users",
+          },
+          pedidos: {
+            key: "orders",
+            sql: "SELECT o.*,u.name,u.email FROM orders o JOIN users u ON u.id=o.user_id ORDER BY o.created DESC",
+            count: "SELECT COUNT(*) n FROM orders",
+          },
+          atendimento: {
+            key: "tickets",
+            sql: "SELECT t.*,u.email FROM tickets t JOIN users u ON u.id=t.user_id ORDER BY t.created DESC",
+            count: "SELECT COUNT(*) n FROM tickets",
+          },
+          histórico: {
+            key: "audit",
+            sql: "SELECT * FROM audit ORDER BY created DESC",
+            count: "SELECT COUNT(*) n FROM audit",
+          },
+        };
+        const source = sources[section],
+          result = {
+            products: [],
+            users: [],
+            orders: [],
+            tickets: [],
+            audit: [],
+          } as Record<string, unknown>;
+        if (source) {
+          result[source.key] = await all(
+            source.sql + " LIMIT ? OFFSET ?",
+            limit,
+            (page - 1) * limit,
+          );
+          result.pagination = {
+            page,
+            limit,
+            total: Number((await all(source.count))[0]?.n || 0),
+          };
+        }
+        return json(result);
+      }
       return json({
         products: await catalog(),
         users: await all(
@@ -1238,137 +1794,9 @@ async function dispatch(req: Request) {
     }
     if (method === "POST") {
       const b = await body(req);
-      if (b.action === "product") {
-        if (
-          !["published", "rejected", "draft", "changes_requested"].includes(
-            b.status,
-          )
-        )
-          fail("Status inválido.");
-        const p = (await catalog()).find((p) => p.id === b.id);
-        if (p && b.status === "published") {
-          const terms = await policy(runtime(), p.author_id);
-          if (
-            p.accepted_bps !== (terms.owned ? 0 : terms.commission_bps) ||
-            p.accepted_owned !== terms.owned
-          )
-            fail("O autor deve aceitar as condições comerciais atuais.", 409);
-        }
-        if (!p || p.demo || (!p.file_key && !bundleIds(p).length))
-          fail("Apenas materiais reais com arquivo podem ser publicados.");
-        if (b.status === "published")
-          await validateBundle(runtime(), p.id, p.author_id, bundleIds(p));
-        const reviewer = (
-          await all<{ name: string; public_name: string }>(
-            "SELECT name,public_name FROM users WHERE id=?",
-            u.id,
-          )
-        )[0];
-        if (
-          b.reviewed === true &&
-          b.status === "published" &&
-          ((p.objectives || "").length < 10 || (p.sources || "").length < 10)
-        )
-          fail(
-            "Para registrar revisão, informe objetivos e referências no material.",
-          );
-        await run(
-          "UPDATE products SET status=?,reviewed_by=?,reviewed_at=? WHERE id=?",
-          b.status,
-          b.reviewed === true && b.status === "published"
-            ? reviewer.public_name || reviewer.name
-            : null,
-          b.reviewed === true && b.status === "published" ? now() : null,
-          p.id,
-        );
-        const feedback =
-          clean(b.feedback, 5000) ||
-          (b.status === "published"
-            ? "Material aprovado para publicação."
-            : "Consulte a administração para orientações.");
-        await run(
-          "INSERT INTO editorial_events(id,product_id,action,feedback,reviewer,created) VALUES(?,?,?,?,?,?)",
-          uid(),
-          p.id,
-          b.status,
-          feedback,
-          reviewer.name,
-          now(),
-        );
-        const noteId = "editorial:" + uid();
-        await notify(
-          runtime(),
-          noteId,
-          p.author_id,
-          b.status === "published"
-            ? "Material publicado"
-            : "Retorno sobre seu material",
-          p.title + " — " + feedback,
-          "/#autores",
-        );
-        await deliver(runtime(), noteId);
-        if (b.status === "published" && p.file_key) {
-          const versions = await all<{ id: string; sequence: number }>(
-            "SELECT id,sequence FROM product_versions WHERE product_id=? AND file_key=? AND status='pending'",
-            p.id,
-            p.file_key,
-          );
-          await run(
-            "UPDATE product_versions SET status='published',released=? WHERE product_id=? AND file_key=?",
-            now(),
-            p.id,
-            p.file_key,
-          );
-          if (versions.length) {
-            const buyers = await all<{ user_id: string }>(
-              "SELECT DISTINCT o.user_id FROM orders o JOIN order_items i ON i.order_id=o.id WHERE o.status='paid' AND i.product_id=? UNION SELECT DISTINCT o.user_id FROM orders o JOIN order_assets a ON a.order_id=o.id WHERE o.status='paid' AND a.product_id=?",
-              p.id,
-              p.id,
-            );
-            for (const buyer of buyers) {
-              const updateId = "update:" + versions[0].id + ":" + buyer.user_id;
-              await notify(
-                runtime(),
-                updateId,
-                buyer.user_id,
-                "Nova versão disponível",
-                p.title +
-                  " recebeu uma atualização. Consulte as novidades na biblioteca.",
-                "/#biblioteca",
-              );
-              await deliver(runtime(), updateId);
-            }
-          }
-        }
-
-        await log(u.id, `product.${b.status}`, p.id);
-      } else if (b.action === "ticket") {
-        await run(
-          "UPDATE tickets SET response=?,status=? WHERE id=?",
-          clean(b.response, 5000),
-          "closed",
-          clean(b.id, 100),
-        );
-        const owner = (
-          await all<{ user_id: string }>(
-            "SELECT user_id FROM tickets WHERE id=?",
-            clean(b.id, 100),
-          )
-        )[0];
-        if (owner) {
-          const id = "support:" + uid();
-          await notify(
-            runtime(),
-            id,
-            owner.user_id,
-            "Resposta do suporte",
-            "Sua solicitação recebeu uma resposta. Consulte o atendimento na Nimbus.",
-            "/#suporte",
-          );
-          await deliver(runtime(), id);
-        }
-        await log(u.id, "ticket.responded", clean(b.id, 100));
-      } else fail("Ação inválida.");
+      if (b.action === "product") await moderateProduct(u, b);
+      else if (b.action === "ticket") await respondTicket(u, b);
+      else fail("Ação inválida.");
       return json({ ok: true });
     }
   }
@@ -1405,6 +1833,17 @@ async function handler(req: Request) {
     )
       return json({ error: error.message }, 400);
     console.error("Nimbus API error", error.message);
+    try {
+      await run(
+        "INSERT INTO operation_events(id,kind,message,created) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM operation_events WHERE created>=?)<100",
+        uid(),
+        "api_error",
+        "Falha inesperada em " +
+          new URL(req.url).pathname.split("/").slice(0, 3).join("/"),
+        now(),
+        now().slice(0, 10),
+      );
+    } catch {}
     return json(
       {
         error:

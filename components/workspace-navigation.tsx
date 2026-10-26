@@ -5,10 +5,12 @@ import { adminGroups, workspaceFor } from "@/lib/navigation";
 export function WorkspaceNavigation({
   view,
   admin,
+  staff = false,
   onNavigate,
 }: {
   view: string;
   admin: boolean;
+  staff?: boolean;
   onNavigate: (path: string) => void;
 }) {
   const area = workspaceFor(view);
@@ -32,6 +34,16 @@ export function WorkspaceNavigation({
             label: "Espaço do autor",
             icon: PenLine,
           },
+          ...(staff && !admin
+            ? [
+                {
+                  id: "staff",
+                  path: "equipe",
+                  label: "Área da equipe",
+                  icon: Settings,
+                },
+              ]
+            : []),
           ...(admin
             ? [
                 {
@@ -62,7 +74,9 @@ export function WorkspaceNavigation({
               ? "ÁREA DO ESTUDANTE"
               : area === "autor"
                 ? "ESPAÇO DO AUTOR"
-                : "ADMINISTRAÇÃO"}
+                : area === "staff"
+                  ? "ÁREA DA EQUIPE"
+                  : "ADMINISTRAÇÃO"}
         </span>
         <small>
           {area === "loja"

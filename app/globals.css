@@ -5525,3 +5525,431 @@ fieldset legend {
     padding: 20px 12px;
   }
 }
+/* Study, marketplace and operation extensions */
+.pdf-reader,
+.learning-experience,
+.study-organization,
+.material-information {
+  margin: 28px 0;
+  padding-top: 24px;
+  border-top: 1px solid #d4cedc;
+}
+.pdf-toolbar,
+.preview-controls,
+.preview-dots,
+.reader-search,
+.library-organizer,
+.plan-filters,
+.compare-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.pdf-toolbar label,
+.library-organizer label,
+.plan-filters label {
+  display: grid;
+  gap: 6px;
+  min-width: 120px;
+  flex: 1;
+}
+.pdf-toolbar input {
+  width: 80px;
+}
+.pdf-stage {
+  max-height: 70vh;
+  overflow: auto;
+  border: 1px solid #24212b;
+  background: #e7e3ec;
+  padding: 16px;
+  border-radius: 8px;
+  overscroll-behavior: contain;
+}
+.pdf-stage canvas {
+  display: block;
+  margin: 0 auto;
+  background: white;
+  max-width: none;
+}
+.pdf-text {
+  white-space: pre-wrap;
+  max-height: 280px;
+  overflow: auto;
+  padding: 16px;
+  line-height: 1.8;
+  user-select: text;
+}
+.pdf-reader textarea {
+  min-height: 100px;
+}
+.annotation-list {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+.annotation-list article {
+  padding: 16px;
+  background: #f3eefb;
+  border: 1px solid #d4cedc;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.table-scroll {
+  overflow: auto;
+  max-width: 100%;
+  margin: 20px 0;
+  border: 1px solid #d4cedc;
+  border-radius: 8px;
+}
+.table-scroll table,
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+.table-scroll th,
+.table-scroll td,
+.comparison-table th,
+.comparison-table td {
+  padding: 14px;
+  border-bottom: 1px solid #ddd6e5;
+  vertical-align: top;
+  min-width: 100px;
+}
+.table-scroll th {
+  background: #f3eefb;
+}
+.material-comparison {
+  padding: 24px;
+  background: #f3eefb;
+  border: 1px solid #24212b;
+  border-radius: 8px;
+  margin: 24px 0;
+  overflow: auto;
+}
+.preview-gallery {
+  margin: 24px 0;
+  min-width: 0;
+}
+.preview-controls {
+  justify-content: space-between;
+}
+.preview-swipe {
+  touch-action: pan-y;
+  border: 1px solid #d4cedc;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f4f0f8;
+}
+.preview-swipe img {
+  display: block;
+  width: 100%;
+  max-height: 700px;
+  object-fit: contain;
+}
+.preview-dots {
+  justify-content: center;
+}
+.preview-dots button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid #24212b;
+  border-radius: 50%;
+  background: white;
+}
+.preview-dots button.active {
+  background: #b9a3f5;
+}
+.flashcard-face {
+  display: block;
+  width: 100%;
+  min-height: 200px;
+  background: #e9e0fa;
+  border: 2px solid #24212b;
+  border-radius: 12px;
+  padding: 28px;
+  font: 600 20px/1.5 inherit;
+  color: #24212b;
+  white-space: pre-wrap;
+  text-align: center;
+  cursor: pointer;
+  margin: 16px 0;
+}
+.quiz fieldset,
+.learning-author fieldset {
+  border: 1px solid #d4cedc;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 16px 0;
+  min-width: 0;
+}
+.quiz legend,
+.learning-author legend {
+  font-weight: 650;
+  padding: 0 8px;
+}
+.quiz .check-label {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 0;
+  gap: 12px;
+}
+.quiz input[type="radio"] {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+}
+.learning-experience iframe {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border: 0;
+  border-radius: 8px;
+}
+.lesson summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 12px;
+  font-weight: 650;
+}
+.learning-author input,
+.learning-author textarea,
+.learning-author select {
+  width: 100%;
+  max-width: 100%;
+}
+.quiz-option-edit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+}
+.quiz-option-edit .check-label {
+  min-width: 90px;
+  flex-shrink: 0;
+}
+.quiz-option-edit input[type="radio"] {
+  width: 20px;
+  height: 20px;
+}
+.pre-line {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.roadmap-list {
+  display: grid;
+  gap: 18px;
+  margin: 24px 0;
+}
+.roadmap-list article,
+.roadmap-item {
+  border: 1px solid #d4cedc;
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 0;
+}
+.roadmap-list summary {
+  cursor: pointer;
+  line-height: 1.7;
+}
+.service-selection {
+  margin: 28px 0;
+}
+.material-information details,
+.product-information details {
+  margin: 16px 0;
+}
+@media (max-width: 640px) {
+  .pdf-stage {
+    padding: 4px;
+    max-height: 60vh;
+  }
+  .pdf-toolbar {
+    gap: 8px;
+  }
+  .pdf-toolbar .btn {
+    padding: 10px;
+    min-height: 44px;
+  }
+  .pdf-toolbar label {
+    min-width: 80px;
+  }
+  .library-organizer,
+  .plan-filters {
+    align-items: stretch;
+  }
+  .library-organizer label,
+  .plan-filters label {
+    min-width: 100%;
+    width: 100%;
+  }
+  .reader-search input {
+    width: 100%;
+    min-width: 0;
+  }
+  .flashcard-face {
+    font-size: 18px;
+    padding: 20px;
+    min-height: 170px;
+  }
+  .quiz fieldset,
+  .learning-author fieldset {
+    padding: 14px;
+  }
+  .material-comparison {
+    padding: 12px;
+  }
+  .learning-author .form-row {
+    grid-template-columns: 1fr;
+  }
+  .quiz-option-edit {
+    flex-wrap: wrap;
+  }
+  .quiz-option-edit > input {
+    flex: 1;
+    min-width: 120px;
+  }
+  .roadmap-list article {
+    padding: 16px;
+  }
+  .table-scroll {
+    margin-inline: 0;
+  }
+  .preview-controls .btn {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+.reader-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.reader-toolbar label {
+  display: grid;
+  gap: 6px;
+  min-width: 70px;
+}
+.reader-toolbar input {
+  max-width: 90px;
+}
+.reader-canvas {
+  max-height: 70vh;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid #24212b;
+  background: #e7e3ec;
+  padding: 12px;
+  border-radius: 8px;
+  overscroll-behavior: contain;
+}
+.reader-canvas canvas {
+  display: block;
+  margin: auto;
+  background: #fff;
+  max-width: none;
+}
+.reader-text {
+  white-space: pre-wrap;
+  max-height: 280px;
+  overflow: auto;
+  line-height: 1.8;
+  padding: 16px;
+  user-select: text;
+}
+.page-annotation {
+  padding: 16px;
+  border: 1px solid #d4cedc;
+  border-radius: 8px;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.page-annotation.highlight {
+  background: #fff3b5;
+}
+.page-annotation.bookmark {
+  background: #ece3fb;
+}
+.page-note {
+  padding: 20px 0;
+}
+.reader-hits {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+.reader-hits button {
+  text-align: left;
+}
+.topic-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+.topic-choices label {
+  padding: 10px;
+  border: 1px solid #d4cedc;
+  border-radius: 6px;
+}
+.saved-filter-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  align-items: center;
+}
+.comparison {
+  margin: 24px 0;
+}
+.comparison .table-wrap {
+  max-width: 100%;
+  overflow: auto;
+}
+.comparison table {
+  min-width: 520px;
+  width: 100%;
+  border-collapse: collapse;
+}
+.comparison th,
+.comparison td {
+  padding: 14px;
+  border: 1px solid #d4cedc;
+  text-align: left;
+  font-size: 13px;
+  vertical-align: top;
+}
+@media (max-width: 640px) {
+  .reader-canvas {
+    padding: 4px;
+    max-height: 60vh;
+  }
+  .reader-toolbar {
+    gap: 8px;
+  }
+  .reader-toolbar .btn {
+    padding: 10px;
+    min-height: 44px;
+  }
+  .topic-choices {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .reader-search .btn {
+    width: 100%;
+  }
+}

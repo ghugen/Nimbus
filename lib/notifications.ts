@@ -80,14 +80,22 @@ export async function purchaseNotice(
   orderId: string,
   userId: string,
 ) {
+  const license = await env.DB.prepare(
+    "SELECT gift,seats FROM order_licenses WHERE order_id=?",
+  )
+    .bind(orderId)
+    .first<{ gift: number; seats: number }>();
+  const special = !!license && (license.gift === 1 || license.seats > 1);
   const id = "purchase:" + orderId;
   await notify(
     env,
     id,
     userId,
     "Sua aquisição está disponível",
-    "O pedido foi confirmado. Seus materiais já estão na biblioteca.",
-    "/#biblioteca",
+    special
+      ? "O pedido foi confirmado. Consulte seus presentes e licenças para acompanhar o acesso dos destinatários."
+      : "O pedido foi confirmado. Seus materiais já estão na biblioteca.",
+    special ? "/#licencas" : "/#biblioteca",
   );
   await deliver(env, id);
 }

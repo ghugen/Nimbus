@@ -1,4 +1,15 @@
 "use client";
+import { LearningAuthor } from "./learning-experience";
+import {
+  PublicationPreview,
+  PublicationChecklist,
+  PublicationChanges,
+  CoverTemplates,
+  PublicationSchedule,
+  ReferenceBuilder,
+} from "./author-enhancements";
+import { ReviewModeration } from "./editorial-plus-panel";
+import { ModerationPanel } from "./operations-plus-panel";
 import { AuthorOverview } from "./workspace-overviews";
 import { CommunityPanel } from "./growth-panels";
 import { useEffect, useState } from "react";
@@ -39,6 +50,11 @@ const blank = {
   sources: "",
   revision_notes: "",
   bundle_ids: [] as string[],
+  prerequisites: "",
+  audience: "",
+  exclusions: "",
+  requirements: "",
+  faq: "",
   rights: false,
   commercial_accepted: false,
 };
@@ -66,6 +82,94 @@ export function AuthorStudio({
   useEffect(() => {
     setTabState(initialTab);
   }, [initialTab]);
+  const [checklist, setChecklist] = useState<Record<string, boolean>>({});
+  const [savedDraft, setSavedDraft] = useState<{
+      data: string;
+      updated: string;
+    } | null>(null),
+    [draftChecked, setDraftChecked] = useState(false),
+    [draftStatus, setDraftStatus] = useState("");
+  useEffect(() => {
+    let active = true;
+    setDraftChecked(false);
+    setSavedDraft(null);
+    callApi("author-draft?key=" + encodeURIComponent(form.id || "new"))
+      .then((d) => {
+        if (!active) return;
+        if (d.draft)
+          setSavedDraft(d.draft as { data: string; updated: string });
+        else setDraftChecked(true);
+      })
+      .catch(() => {
+        if (active) setDraftChecked(true);
+      });
+    if (form.id)
+      callApi("product-extra?id=" + encodeURIComponent(form.id))
+        .then((d) => {
+          if (!active) return;
+          const extra = d.extra as Record<string, unknown>;
+          setForm((f) => ({
+            ...f,
+            ...Object.fromEntries(
+              [
+                "prerequisites",
+                "audience",
+                "exclusions",
+                "requirements",
+                "faq",
+              ].map((k) => [k, String(extra[k] || "")]),
+            ),
+          }));
+          try {
+            setChecklist(JSON.parse(String(extra.checklist || "{}")));
+          } catch {}
+        })
+        .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [form.id]);
+  useEffect(() => {
+    if (tab !== "publicar" || !draftChecked || !form.title) return;
+    const timer = setTimeout(() => {
+      callApi("author-draft", { key: form.id || "new", data: form })
+        .then(() =>
+          setDraftStatus(
+            "Rascunho automático sincronizado. Arquivos precisam ser reenviados após fechar a página.",
+          ),
+        )
+        .catch((e) =>
+          setDraftStatus(
+            "Não foi possível sincronizar o rascunho: " + e.message,
+          ),
+        );
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [form, tab, draftChecked]);
+  function restore() {
+    if (!savedDraft) return;
+    try {
+      const d = JSON.parse(savedDraft.data) as Record<string, unknown>,
+        safe = Object.fromEntries(
+          Object.entries(blank).map(([key, value]) => [
+            key,
+            typeof value === "string" && typeof d[key] === "string"
+              ? d[key]
+              : key === "bundle_ids" && Array.isArray(d[key])
+                ? (d[key] as unknown[]).filter((x) => typeof x === "string")
+                : value,
+          ]),
+        );
+      setForm(safe as typeof blank);
+      setSavedDraft(null);
+      setDraftChecked(true);
+      setMessage(
+        "Texto recuperado. Confirme os direitos e as condições comerciais novamente antes de enviar.",
+      );
+    } catch {
+      setError("Não foi possível recuperar este rascunho.");
+    }
+  }
   async function load() {
     setData((await callApi("author")) as unknown as Data);
   }
@@ -143,12 +247,18 @@ export function AuthorStudio({
       const id = String(result.id);
       setForm((f) => ({ ...f, id }));
       await callApi("author-meta", { ...form, id });
+      await callApi("product-extra", { ...form, id, checklist });
       if (file) await upload(id, "file", file);
       if (cover) await upload(id, "cover", cover);
       for (const image of previews) await upload(id, "preview", image);
       if (submit) await callApi("submit", { id });
       else await callApi("author-meta", { ...form, id });
       setMessage(submit ? "Material enviado para análise." : "Rascunho salvo.");
+      await callApi("author-draft", {
+        key: form.id || "new",
+        action: "delete",
+      });
+      setSavedDraft(null);
       setTab("materiais");
       setFile(null);
       setCover(null);
@@ -171,6 +281,11 @@ export function AuthorStudio({
   );
   const text = (
     name:
+      | "prerequisites"
+      | "audience"
+      | "exclusions"
+      | "requirements"
+      | "faq"
       | "description"
       | "preview"
       | "objectives"
@@ -202,6 +317,8 @@ export function AuthorStudio({
           ["vendas", "Vendas e recebimentos"],
           ["indicadores", "Indicadores"],
           ["correcoes", "Correções"],
+          ["perguntas", "Perguntas"],
+          ["avaliacoes", "Avaliações"],
         ].map(([key, label]) => (
           <button
             key={key}
@@ -212,6 +329,41 @@ export function AuthorStudio({
           </button>
         ))}
       </div>
+      {tab === "publicar" && savedDraft && (
+        <div className="notice">
+          <strong>
+            Há um preenchimento salvo em{" "}
+            {new Date(savedDraft.updated).toLocaleString("pt-BR")}.
+          </strong>
+          <div className="studio-actions">
+            <button className="btn secondary small" onClick={restore}>
+              Recuperar preenchimento
+            </button>
+            <button
+              className="text-link"
+              onClick={async () => {
+                try {
+                  await callApi("author-draft", {
+                    key: form.id || "new",
+                    action: "delete",
+                  });
+                  setSavedDraft(null);
+                  setDraftChecked(true);
+                } catch (e) {
+                  setError((e as Error).message);
+                }
+              }}
+            >
+              Descartar preenchimento anterior
+            </button>
+          </div>
+        </div>
+      )}
+      {tab === "publicar" && draftStatus && (
+        <p className="muted" role="status">
+          {draftStatus}
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -270,6 +422,20 @@ export function AuthorStudio({
                         </a>
                       )}
                       <button
+                        type="button"
+                        className="text-link"
+                        onClick={() =>
+                          action(async () => {
+                            await callApi("duplicate-product", { id: p.id });
+                            setMessage(
+                              "Cópia criada como rascunho, sem arquivos e sem aceite comercial.",
+                            );
+                          })
+                        }
+                      >
+                        Duplicar cadastro
+                      </button>
+                      <button
                         className="text-link"
                         disabled={busy}
                         onClick={() =>
@@ -282,6 +448,21 @@ export function AuthorStudio({
                         Enviar para análise
                       </button>
                     </div>
+                    <LearningAuthor
+                      id={p.id}
+                      onSaved={() => {
+                        load().catch((e) => setError(e.message));
+                      }}
+                    />
+                    <PublicationSchedule id={p.id} />
+                    <CoverTemplates
+                      id={p.id}
+                      title={p.title}
+                      subject={p.subject}
+                      onSaved={() => {
+                        load().catch((e) => setError(e.message));
+                      }}
+                    />
                     {data.editorial
                       ?.filter((e) => e.product_id === p.id)
                       .slice(0, 3)
@@ -306,6 +487,8 @@ export function AuthorStudio({
               )}
             </>
           )}
+          {tab === "avaliacoes" && <ReviewModeration />}
+          {tab === "perguntas" && <ModerationPanel kind="questions" author />}
           {tab === "perfil" && <AuthorProfile />}
           {tab === "vendas" && <FinancePanel report={data.finance} />}{" "}
           {tab === "indicadores" && <AnalyticsPanel />}
@@ -332,6 +515,8 @@ export function AuthorStudio({
                 ))}
               </div>
               <h2>{form.id ? "Atualizar material" : "Publicar material"}</h2>
+              <PublicationPreview data={form} cover={cover} />
+              {form.id && <PublicationChanges id={form.id} />}
               {step === 0 && (
                 <>
                   {field("title", "Título", {
@@ -425,8 +610,21 @@ export function AuthorStudio({
                   {text("objectives", "Objetivos de aprendizagem")}
                   {text("toc", "Sumário / assuntos abordados")}
                   {text("sources", "Referências e fontes")}
+                  <ReferenceBuilder
+                    onInsert={(line) =>
+                      setForm((f) => ({
+                        ...f,
+                        sources: (f.sources ? f.sources + "\n" : "") + line,
+                      }))
+                    }
+                  />
                   {text("preview", "Trecho público representativo", 50)}
                   {text("revision_notes", "O que mudou nesta versão?")}
+                  {text("prerequisites", "Conhecimentos prévios necessários")}
+                  {text("audience", "Para quem é este material?")}
+                  {text("exclusions", "O que não está incluído?")}
+                  {text("requirements", "Requisitos para abrir os arquivos")}
+                  {text("faq", "Perguntas frequentes e respostas")}
                 </>
               )}
               {step === 2 && (
@@ -524,6 +722,11 @@ export function AuthorStudio({
               )}
               {step === 3 && (
                 <>
+                  <PublicationChecklist
+                    id={form.id}
+                    checked={checklist}
+                    onChange={setChecklist}
+                  />
                   <p className="notice">
                     O material ficará em análise. O selo de revisão só aparece
                     quando um revisor registra explicitamente sua avaliação.

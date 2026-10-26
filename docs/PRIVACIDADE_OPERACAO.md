@@ -63,3 +63,13 @@ Medição de catálogo é opcional e desativada sem escolha afirmativa. O identi
 O inventário também inclui uso de cupons por conta e pedido, sugestões de materiais e relatos de correção por página. Sugestões são privadas ao estudante e à administração; correções também são acessíveis ao autor do material. Relatos não devem conter dados identificáveis de pacientes ou terceiros. Respostas geram avisos transacionais. A exportação inclui os registros do solicitante. Definir e aplicar retenção desses registros em conjunto com os demais dados operacionais.
 
 PDFs de demonstração são públicos, gratuitos e originais; o acesso direto dispensa cadastro. O carrinho e a aquisição na biblioteca continuam opcionais. A audiência da hospedagem permanece conforme o compartilhamento configurado pelo proprietário.
+
+## Dados acrescentados nos módulos de estudo e serviços
+
+O banco passou a guardar página/zoom, pasta, estado de estudo, data de revisão, marcadores, notas, trechos destacados, filtros, preferências e autores seguidos. Atividades guardam progresso das aulas, autoavaliação dos cartões e tentativas de questões. São registros privados da conta; o acesso ao material depende de aquisição, licença ou assinatura ativa.
+
+Presentes e licenças guardam e-mail do destinatário e a vinculação à primeira conta autenticada com esse e-mail verificado. Reservas guardam horário, aceite e preço; orçamentos guardam briefing, escopo aceito e referência de entrega. Assinaturas preservam os materiais e arquivos contratados. Evidências de credenciais ficam restritas à administração; somente a descrição da verificação é exibida no perfil público.
+
+A exportação pessoal inclui os novos registros da própria conta, sem revelar tokens ou meios de pagamento. A exportação administrativa de recuperação contém dados de várias contas e deve ser tratada como cópia protegida. O manifesto não contém os arquivos: uma cópia separada do armazenamento é necessária. Nenhuma rotina nova executa exclusão automática, define prazo de retenção ou certifica adequação legal.
+
+Vídeos externos só carregam após a ação do estudante. Limites de uso guardam contadores de curta duração e limpam lotes vencidos. Os logs operacionais novos registram rota e categoria de falha; não incluem corpo da requisição ou segredo do provedor. A operação deve atualizar seu inventário, avisos e critérios de retenção antes da abertura comercial.

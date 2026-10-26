@@ -6,7 +6,13 @@ Plataforma web responsiva para descoberta e comercialização de materiais acad�
 
 A aplicação possui frontend e backend conectados a banco D1 e arquivos privados R2. O catálogo inicial contém **exemplos identificados como demonstrativos**, que não podem ser vendidos, e um guia gratuito original em texto para experimentar o fluxo completo. Não há números de vendas, avaliações ou credenciais inventadas.
 
-**Não está pronta para receber pagamentos reais sem configuração.** É necessário cadastrar a conta Stripe, validar o webhook em ambiente de testes, configurar administradores, publicar PDFs comerciais autorizados, completar as informações do responsável pela operação e definir atendimento, cancelamentos e condições com autores. A hospedagem inicial é privada para o proprietário; isso também impede chamadas externas de webhook até uma abertura de acesso planejada.
+**Não está pronta para receber pagamentos reais sem configuração.** É necessário cadastrar a conta Stripe, validar o webhook em ambiente de testes, configurar administradores, publicar PDFs comerciais autorizados, completar as informações do responsável pela operação e definir atendimento, cancelamentos e condições com autores. O compartilhamento atual da hospedagem é preservado; chamadas externas de webhook exigem um endpoint acessível ao provedor e uma abertura de acesso planejada.
+
+## As 100 melhorias
+
+O acompanhamento detalhado está em **Administração → Gestão → 100 melhorias** (`/#admin/melhorias`) e em [docs/ROADMAP_100.md](docs/ROADMAP_100.md). Cada item tem evidência técnica separada do planejamento editável. Os estados não representam certificação ou homologação externa.
+
+Nesta entrega: **66 implementados, 24 parciais, 9 dependentes de ativação externa e 1 pendente**. O item pendente é o aplicativo nativo, etapa anteriormente adiada. A marcação "parcial" registra limitações concretas, incluindo cobrança ainda não homologada, backup dos objetos, revisão assistiva e agendamento sem visitas.
 
 ## Recursos implementados
 
@@ -33,10 +39,10 @@ A aplicação possui frontend e backend conectados a banco D1 e arquivos privado
 ## O que não está automatizado
 
 - Transferências bancárias automáticas, saques, Stripe Connect e emissão fiscal. O financeiro agora calcula comissões e registra repasses externos.
-- Reembolsos pelo painel Nimbus (devem ser tratados pela operação no provedor).
-- E-mail transacional, recuperação por e-mail, login social fora da autenticação da hospedagem.
+- Reembolsos têm solicitação e aprovação no painel, mas só funcionam com o provedor configurado e precisam de homologação real.
+- E-mail transacional por Resend e acesso por Clerk estão preparados; dependem de chaves, remetente verificado e testes externos.
 - Proteção DRM: nenhum sistema impede totalmente a redistribuição após um download autorizado.
-- Assinaturas, cupons, afiliados e recomendação por IA.
+- Assinaturas e cupons estão implementados. Recorrência exige homologação; afiliados e recomendação por IA não estão implementados.
 - Revisão científica, jurídica ou editorial automática dos arquivos.
 - Teste de cobrança com conta Stripe real: os testes automatizados simulam o provedor.
 
@@ -169,7 +175,7 @@ Neobrutalismo moderado com inspiração editorial: marfim `#FAF7F0`, preto tinta
 
 A página de privacidade permite exportação JSON autenticada e solicitações de acesso, correção, exclusão, oposição e informações, com protocolo e acompanhamento. A administração possui aba **Privacidade** para configurar responsável, e-mail público e retenção, além de responder solicitações. Os aceites de compra e condições do autor ficam registrados separadamente; não são tratados como consentimento genérico de LGPD.
 
-A central não envia e-mails, não executa exclusão automática nem configura backups. Os campos da operação precisam ser preenchidos, os prazos de atendimento acompanhados e as bases legais, os fornecedores e a retenção revisados antes das vendas. Consulte `docs/PRIVACIDADE_OPERACAO.md`. A presença desses controles não certifica adequação integral à LGPD.
+A central não executa exclusão automática nem agenda backups completos. E-mails operacionais dependem de Resend configurado; a nova exportação de recuperação não inclui os objetos R2. Os campos da operação precisam ser preenchidos, os prazos de atendimento acompanhados e as bases legais, os fornecedores e a retenção revisados antes das vendas. Consulte `docs/PRIVACIDADE_OPERACAO.md`. A presença desses controles não certifica adequação integral à LGPD.
 
 ## Marca Nimbus
 
@@ -197,7 +203,7 @@ Sugestões de materiais ficam privadas ao solicitante e à administração. Corr
 
 Quatro PDFs originais gratuitos (três páginas cada), em `public/materiais-gratuitos/`, disponíveis sem cadastro na seção Baixar PDFs gratuitos. Fontes editoriais e gerador reproduzível em `scripts/content/demo-guides.json` e `scripts/generate-demo-pdfs.py`. Materiais de organização de estudos, leitura científica, fichamento e revisão ativa. Não são apostilas clínicas nem cópias de publicações de terceiros.
 
-Ainda dependem da operação: credenciais Stripe, Clerk e Resend; domínio/remetente verificado; dados confirmados do responsável por privacidade e critérios de retenção; arquivos comerciais do proprietário. Não foram criadas contas externas nem realizadas cobranças reais. Mentorias, agenda, transmissão de aulas, assinatura recorrente e emissão de certificados não estão implementadas.
+Ainda dependem da operação: credenciais Stripe, Clerk e Resend; domínio/remetente verificado; dados confirmados do responsável por privacidade e critérios de retenção; arquivos comerciais do proprietário. Não foram criadas contas externas nem realizadas cobranças reais. Ofertas de serviços, agenda, orçamento, aulas e assinatura recorrente agora têm implementação descrita abaixo. A Nimbus não transmite vídeos: incorpora conteúdo hospedado em serviços externos após ação do estudante. Certificados não foram implementados.
 
 ## Planejamento comercial administrativo
 
@@ -212,3 +218,32 @@ A biblioteca destaca um material em andamento com “Continuar estudando”. O e
 Links diretos preservados: `/#admin/ideias`, `/#admin/financeiro`, `/#admin/aprovações` e `/#autores/publicar`. A permissão é verificada no servidor, inclusive no endpoint do resumo; ocultar menus não concede nem revoga acesso. Todos os usuários podem acessar o fluxo de submissão de autoria, sujeito à revisão editorial e às condições comerciais.
 
 Validação: testes de navegação, destinos seguros, agregações do resumo e bloqueio de acesso; conferência visual dos componentes em 390 e 414 px usando dados fictícios, sem conceder acesso a dados reais. A captura em `docs/nimbus-workspaces-mobile.jpg` registra essa conferência. Teste autenticado completo em dispositivo físico permanece uma validação operacional complementar.
+
+## Estudo, publicação e operação ampliados
+
+- Leitor PDF.js carregado sob demanda: navegação, zoom, retomada, busca no texto extraível, marcadores, notas e destaques em trechos extraídos. Pastas, estado de estudo e data de revisão ficam na conta do estudante. PDF digitalizado sem camada de texto precisa de OCR; destaques ainda não são desenhados nas coordenadas do PDF.
+- Busca aproximada, filtros salvos, preferências de disciplinas, comparação, seguir autores e páginas por disciplina. Conhecimentos prévios, público, exclusões, requisitos, perguntas frequentes, amostras, componentes de kits e perguntas moderadas ajudam a decidir antes da compra.
+- Presentes e licenças para grupos com destinatário por e-mail verificado e quota no banco. O comprador de presente não recebe acesso ao material; estorno revoga os direitos do pedido.
+- Solicitações de reembolso, decisão administrativa e chamada idempotente ao provedor. Um bloqueio financeiro preserva os repasses durante o processamento; a confirmação e a conciliação usam os valores do provedor. Comprovante de aquisição não substitui documento fiscal.
+- Rascunhos automáticos, recuperação sem reaproveitar aceites, prévia, checklist, duplicação, capas, comparação do cadastro e programação editorial. Programações são liberadas na primeira leitura do catálogo após a data, sem um cron externo configurado.
+- Critérios editoriais, registro dos aspectos revisados, credenciais verificadas com evidência privada, denúncias, duplicatas por hash, correção vinculada a versão e moderação de avaliações.
+- Papéis de revisão e atendimento com endpoints próprios, sem acesso administrativo global. Relatórios por período/material/acervo/cupom, evolução mensal em tabela, CSV, tarefas e alertas de pendências.
+- Flashcards, questões com correção no servidor, aulas e progresso. Conteúdo aprovado é separado dos rascunhos de atividades. Gabaritos não são entregues antes da tentativa.
+- Planos de biblioteca com catálogo e arquivos contratados preservados, confirmação recorrente via webhook e consulta ao provedor, portal de assinatura e posts de clube. Assinaturas inativas ou expiradas não liberam conteúdo. Planos aceitam apenas acervo próprio.
+- Serviços operados pelo proprietário: mentorias, oficinas, aulas ao vivo e editorial. Ofertas, termos, horários, lotação transacional, pagamento, link privado e orçamento com aceite/entrega. Dependem de cadastrar ofertas e homologar os provedores. Não incluem marketplace de prestadores ou videoconferência hospedada pela Nimbus.
+
+## Recuperação e validação
+
+Administração → Relatórios e recuperação exporta dados e manifesto dos arquivos. O arquivo contém dados pessoais: guarde-o em local protegido. A exportação do navegador limita-se a 50 mil registros; volumes maiores exigem exportação D1 pela hospedagem. Preserve separadamente os objetos R2, inclusive versões adquiridas.
+
+Ensaio de restauração exclusivamente em um banco SQLite **novo e isolado**:
+
+```bash
+node scripts/restore-backup.mjs nimbus-dados-backup.json ensaio-novo.sqlite
+```
+
+O script não conecta a banco remoto nem sobrescreve um arquivo existente. Aplica as migrações e restaura dados em transação, preservando os gatilhos. Não restaura arquivos R2, segredos, DNS ou configuração da hospedagem. Ainda falta ensaiar a recuperação operacional completa e configurar cópias periódicas.
+
+Validação desta entrega: TypeScript, build de produção, 8 testes unitários e 269 verificações de integração com SQLite real e Stripe/R2 simulados. Cobertura inclui isolamento de notas e rascunhos, limites de licenças, presentes, papéis de equipe, conteúdo aprovado, pontuação no servidor, capacidade de horários, reembolso, assinatura e restauração SQL. Os testes não substituem homologação com contas reais, dispositivos físicos, tecnologia assistiva ou teste de carga.
+
+O worker do PDF.js é copiado da dependência travada por `scripts/prepare-pdf-worker.mjs` antes de desenvolvimento/build e servido como arquivo estático versionado. Isso evita injetar o runtime de desenvolvimento dentro do Web Worker. A captura `docs/nimbus-reader-mobile.jpg` registra navegação e busca no leitor a 390 px com PDF original público, sem simular acesso privado.

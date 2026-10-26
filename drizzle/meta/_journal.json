@@ -71,6 +71,48 @@
       "when": 1792960207786,
       "tag": "0009_cute_dragon_lord",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792961839410,
+      "tag": "0010_lonely_talos",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792962628325,
+      "tag": "0011_foamy_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792963091714,
+      "tag": "0012_keen_big_bertha",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1792963635980,
+      "tag": "0013_calm_azazel",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1792964365084,
+      "tag": "0014_medical_skin",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1792978232891,
+      "tag": "0015_clammy_cerebro",
+      "breakpoints": true
     }
   ]
 }

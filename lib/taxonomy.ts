@@ -62,6 +62,7 @@ export const materialTypes = [
   "Modelos e ferramentas",
   "Revisões para provas",
   "Kits e coleções",
+  "Cursos e trilhas",
 ];
 export const levels = [
   "Graduação",

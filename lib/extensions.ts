@@ -1,3 +1,4 @@
+import { hasPackage } from "./learning-products";
 import type { RichProduct, StoreRuntime } from "./catalog-services";
 import {
   bundleIds,
@@ -122,6 +123,12 @@ export async function extension(
       clean(b.bio, 4000),
       clean(b.credentials, 2000),
       b.public === true ? 1 : 0,
+      u.id,
+    );
+    await run(
+      env,
+      "UPDATE profile_verifications SET status='unverified',updated=? WHERE user_id=?",
+      now(),
       u.id,
     );
     return json({ ok: true });
@@ -262,7 +269,7 @@ export async function extension(
         )
       )[0];
     if (!p) fail("Acesso negado.", 403);
-    if (!p.file_key && !bundleIds(p).length)
+    if (!p.file_key && !bundleIds(p).length && !(await hasPackage(env, p.id)))
       fail("Envie o arquivo ou configure os materiais do kit.");
     await validateBundle(env, p.id, u.id, bundleIds(p));
     await run(env, "UPDATE products SET status='pending' WHERE id=?", p.id);

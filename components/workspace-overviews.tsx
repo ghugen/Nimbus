@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { money, type Product } from "@/lib/catalog";
 type Overview = {
+  from?: string;
+  to?: string;
   orders: number;
   gross: number;
   nimbus_net: number;
@@ -32,12 +34,24 @@ export function AdminOverview({
 }) {
   const [data, setData] = useState<Overview | null>(null),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [from, setFrom] = useState(""),
+    [to, setTo] = useState("");
   async function load() {
     setBusy(true);
     setError("");
     try {
-      setData((await callApi("admin-overview")).overview as Overview);
+      setData(
+        (
+          await callApi(
+            "admin-overview?" +
+              new URLSearchParams({
+                ...(from ? { from } : {}),
+                ...(to ? { to } : {}),
+              }),
+          )
+        ).overview as Overview,
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -48,14 +62,43 @@ export function AdminOverview({
     load();
   }, []);
   return (
-    <AdminOverviewView
-      data={data}
-      error={error}
-      busy={busy}
-      name={name}
-      onNavigate={onNavigate}
-      onRefresh={load}
-    />
+    <>
+      <form
+        className="metrics-dates"
+        onSubmit={(e) => {
+          e.preventDefault();
+          load();
+        }}
+      >
+        <label>
+          Vendas a partir de
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+        </label>
+        <label>
+          Até
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
+        </label>
+        <button className="btn secondary" disabled={busy}>
+          Aplicar período
+        </button>
+      </form>
+      <AdminOverviewView
+        data={data}
+        error={error}
+        busy={busy}
+        name={name}
+        onNavigate={onNavigate}
+        onRefresh={load}
+      />
+    </>
   );
 }
 export function AdminOverviewView({
@@ -111,9 +154,13 @@ export function AdminOverviewView({
             ))}
           </div>
           <p className="muted">
-            Valores acumulados. O líquido inclui as conciliações e estornos
-            registrados; não inclui impostos e demais despesas.{" "}
-            {data.finance_pending} item(ns) aguardam conciliação.
+            {data.from
+              ? `Vendas de ${data.from} até ${data.to}. `
+              : "Valores acumulados. "}{" "}
+            O líquido considera estornos registrados até agora; não inclui
+            impostos e demais despesas. Saldos para repasse e pendências mostram
+            a posição atual. {data.finance_pending} item(ns) aguardam
+            conciliação.
           </p>
           <h3 className="subheading">O que precisa de atenção</h3>
           <div className="attention-grid">

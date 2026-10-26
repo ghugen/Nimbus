@@ -146,6 +146,13 @@ export function CommunityPanel({
           <p className="pre-line">{r.description || r.message}</p>
           <small>{new Date(r.created).toLocaleDateString("pt-BR")}</small>
           {r.response && <p className="notice pre-line">{r.response}</p>}
+          {(manage || author) && kind === "issues" && (
+            <CorrectionVersion
+              issueId={r.id}
+              productId={r.product_id}
+              onSaved={load}
+            />
+          )}
           {(manage || author) && (
             <form
               className="form"
@@ -509,7 +516,9 @@ export function CouponsAdmin() {
 export function CouponInput({
   ids,
   onApplied,
+  seats = 1,
 }: {
+  seats?: number;
   ids: string[];
   onApplied: (
     q: { code: string; discount: number; total: number } | null,
@@ -518,7 +527,7 @@ export function CouponInput({
   const [code, setCode] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  const key = ids.toSorted().join(",");
+  const key = ids.toSorted().join(",") + ":" + seats;
   useEffect(() => {
     onApplied(null);
     setError("");
@@ -543,7 +552,7 @@ export function CouponInput({
           onClick={async () => {
             setBusy(true);
             try {
-              const q = await callApi("coupon-quote", { ids, code });
+              const q = await callApi("coupon-quote", { ids, code, seats });
               onApplied(q as { code: string; discount: number; total: number });
               setError("");
             } catch (e) {
@@ -566,5 +575,80 @@ export function CouponInput({
         Válido para materiais do acervo próprio, conforme condições.
       </small>
     </div>
+  );
+}
+
+function CorrectionVersion({
+  issueId,
+  productId,
+  onSaved,
+}: {
+  issueId: string;
+  productId: string;
+  onSaved: () => Promise<void>;
+}) {
+  const [versions, setVersions] = useState<
+      { id: string; sequence: number; notes: string }[]
+    >([]),
+    [message, setMessage] = useState("");
+  return (
+    <details
+      className="panel"
+      onToggle={async (e) => {
+        if (e.currentTarget.open) {
+          try {
+            setVersions(
+              (
+                await callApi(
+                  "editorial-versions?id=" + encodeURIComponent(productId),
+                )
+              ).versions as typeof versions,
+            );
+          } catch (e) {
+            setMessage((e as Error).message);
+          }
+        }
+      }}
+    >
+      <summary>Vincular resolução a uma versão publicada</summary>
+      <form
+        className="form"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const f = new FormData(e.currentTarget);
+          try {
+            await callApi("correction-version", {
+              id: issueId,
+              version_id: f.get("version_id"),
+              response: f.get("response"),
+            });
+            setMessage("Correção vinculada e estudante avisado.");
+            await onSaved();
+          } catch (e) {
+            setMessage((e as Error).message);
+          }
+        }}
+      >
+        <label>
+          Versão corrigida
+          <select name="version_id" required>
+            <option value="">Escolha uma versão aprovada</option>
+            {versions.map((v) => (
+              <option key={v.id} value={v.id}>
+                Versão {v.sequence} · {v.notes.slice(0, 100)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Orientação ao estudante
+          <textarea name="response" maxLength={3000} />
+        </label>
+        <button className="btn secondary small" disabled={!versions.length}>
+          Registrar resolução
+        </button>
+        {message && <p role="status">{message}</p>}
+      </form>
+    </details>
   );
 }

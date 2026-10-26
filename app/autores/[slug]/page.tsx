@@ -12,11 +12,13 @@ type Author = {
   bio: string;
   credentials: string;
   profile_public: number;
+  verified_label?: string;
+  verified_at?: string;
 };
 async function lookup(slug: string) {
   const runtime = env as unknown as StoreRuntime;
   const author = await runtime.DB.prepare(
-    "SELECT id,author_slug,public_name,bio,credentials,profile_public FROM users WHERE author_slug=?",
+    "SELECT u.id,u.author_slug,u.public_name,u.bio,u.credentials,u.profile_public,CASE WHEN v.status='verified' THEN v.label ELSE '' END verified_label,v.updated verified_at FROM users u LEFT JOIN profile_verifications v ON v.user_id=u.id WHERE u.author_slug=?",
   )
     .bind(slug)
     .first<Author>();
@@ -70,6 +72,16 @@ export default async function AuthorPage({ params }: Props) {
             )}
           </div>
         )}
+        {a.verified_label && (
+          <div className="notice">
+            <strong>Verificação administrativa</strong>
+            <p>{a.verified_label}</p>
+            <small>
+              A verificação se limita ao que está descrito acima; não representa
+              validação de todo o conteúdo publicado.
+            </small>
+          </div>
+        )}
         <h2>Materiais publicados.</h2>
         <div className="author-public-grid">
           {products.map((p) => (
@@ -80,6 +92,8 @@ export default async function AuthorPage({ params }: Props) {
             >
               {p.cover_key && (
                 <img
+                  loading="lazy"
+                  decoding="async"
                   className="author-product-cover"
                   src={"/api/asset/" + p.id + "/cover"}
                   alt={"Capa de " + p.title}

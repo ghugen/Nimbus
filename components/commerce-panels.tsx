@@ -1,4 +1,5 @@
 "use client";
+import { ReviewCriteria, LearningReview } from "./editorial-plus-panel";
 import { useEffect, useState } from "react";
 import { signedFetch, downloadPrivate } from "@/lib/client-auth";
 import { money, type Product } from "@/lib/catalog";
@@ -303,7 +304,11 @@ export function OperationsPanel() {
 export function EditorialPanel({
   products,
   onRefresh,
+  endpoint = "admin",
+  fileEndpoint = "admin-file",
 }: {
+  endpoint?: string;
+  fileEndpoint?: string;
   products: Product[];
   onRefresh: () => Promise<void>;
 }) {
@@ -333,12 +338,13 @@ export function EditorialPanel({
               const f = new FormData(e.currentTarget);
               setBusy(true);
               try {
-                await callApi("admin", {
+                await callApi(endpoint, {
                   action: "product",
                   id: p.id,
                   status: f.get("status"),
                   feedback: f.get("feedback"),
                   reviewed: f.get("reviewed") === "on",
+                  review_checks: f.getAll("review_checks"),
                 });
                 await onRefresh();
                 setError("");
@@ -365,14 +371,16 @@ export function EditorialPanel({
                 type="button"
                 className="btn secondary small"
                 onClick={() =>
-                  downloadPrivate("/api/admin-file/" + p.id).catch((e) =>
-                    setError(e.message),
+                  downloadPrivate("/api/" + fileEndpoint + "/" + p.id).catch(
+                    (e) => setError(e.message),
                   )
                 }
               >
                 Baixar arquivo para revisão
               </button>
             )}
+            <LearningReview id={p.id} />
+            <ReviewCriteria format={p.format} />
             <label>
               Decisão
               <select name="status">

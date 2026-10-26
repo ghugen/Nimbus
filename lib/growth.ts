@@ -1,3 +1,4 @@
+import { period } from "./management";
 import { financialReport } from "./finance";
 import { commercialIdeas } from "./commercial-ideas";
 import type { StoreRuntime } from "./catalog-services";
@@ -118,23 +119,32 @@ export async function growth(
   if (path === "admin-overview" && method === "GET") {
     const u = await auth(req);
     if (!u.admin) fail("Acesso restrito à administração.", 403);
+    const { from, to, end } = period(url);
     const [counts, finance] = await Promise.all([
       rows(
         e,
-        `SELECT (SELECT COUNT(*) FROM orders WHERE status='paid') orders,(SELECT COALESCE(SUM(total),0) FROM orders WHERE status='paid') gross,(SELECT COUNT(*) FROM products WHERE status='pending' AND demo=0) pending_products,(SELECT COUNT(*) FROM products WHERE status='published' AND demo=0) published,(SELECT COUNT(*) FROM products WHERE status='draft' AND demo=0) drafts,(SELECT COUNT(*) FROM tickets WHERE status!='closed') tickets,(SELECT COUNT(*) FROM content_issues WHERE status IN ('open','in_progress')) corrections,(SELECT COUNT(*) FROM commercial_plan WHERE status IN ('planned','producing')) ideas`,
+        `SELECT (SELECT COUNT(*) FROM orders WHERE status='paid' AND created>=? AND created<=?) orders,(SELECT COALESCE(SUM(total),0) FROM orders WHERE status='paid' AND created>=? AND created<=?) gross,(SELECT COUNT(*) FROM products WHERE status='pending' AND demo=0) pending_products,(SELECT COUNT(*) FROM products WHERE status='published' AND demo=0) published,(SELECT COUNT(*) FROM products WHERE status='draft' AND demo=0) drafts,(SELECT COUNT(*) FROM tickets WHERE status!='closed') tickets,(SELECT COUNT(*) FROM content_issues WHERE status IN ('open','in_progress')) corrections,(SELECT COUNT(*) FROM commercial_plan WHERE status IN ('planned','producing')) ideas`,
+        from,
+        end,
+        from,
+        end,
       ),
       financialReport(e),
     ]);
     return json({
       overview: {
         ...counts[0],
-        nimbus_net: finance.entries.reduce(
-          (s, x) =>
-            s +
-            Number(x.platform) -
-            (Number(x.refunded_gross) - Number(x.refunded_author)),
-          0,
-        ),
+        from,
+        to,
+        nimbus_net: finance.entries
+          .filter((x) => String(x.created) >= from && String(x.created) <= end)
+          .reduce(
+            (s, x) =>
+              s +
+              Number(x.platform) -
+              (Number(x.refunded_gross) - Number(x.refunded_author)),
+            0,
+          ),
         author_payable: finance.balances.reduce((s, x) => s + x.payable, 0),
         finance_pending: finance.pending.length,
       },
@@ -248,7 +258,15 @@ export async function growth(
         (id) =>
           products.find((p) => p.id === id) || fail("Material indisponível."),
       );
-    const q = await couponQuote(e, clean(b.code, 40), items, u.id);
+    const seats = Number(b.seats || 1);
+    if (!Number.isSafeInteger(seats) || seats < 1 || seats > 100)
+      fail("Quantidade de licenças inválida.");
+    const q = await couponQuote(
+      e,
+      clean(b.code, 40),
+      items.map((p) => ({ ...p, price: p.price * seats })),
+      u.id,
+    );
     return json({ code: q.code, discount: q.discount, total: q.total });
   }
   if (path === "coupons") {

@@ -1,4 +1,4 @@
-export type Workspace = "loja" | "estudante" | "autor" | "admin";
+export type Workspace = "loja" | "estudante" | "autor" | "admin" | "staff";
 export const adminGroups = [
   { label: "Visão geral", items: [["resumo", "Resumo"]] },
   {
@@ -8,6 +8,8 @@ export const adminGroups = [
       ["aprovações", "Aprovações"],
       ["coleções", "Coleções"],
       ["cupons", "Cupons"],
+      ["planos", "Planos e clubes"],
+      ["serviços", "Encontros e serviços"],
     ],
   },
   {
@@ -15,6 +17,7 @@ export const adminGroups = [
     items: [
       ["pedidos", "Pedidos"],
       ["financeiro", "Financeiro"],
+      ["reembolsos", "Reembolsos"],
       ["indicadores", "Indicadores"],
     ],
   },
@@ -25,12 +28,21 @@ export const adminGroups = [
       ["atendimento", "Atendimento"],
       ["correções", "Correções"],
       ["sugestões", "Sugestões"],
+      ["perguntas", "Perguntas"],
+      ["denúncias", "Autoria e qualidade"],
+      ["avaliações", "Avaliações"],
+      ["verificações", "Credenciais"],
     ],
   },
   {
     label: "Gestão",
     items: [
       ["ideias", "Ideias e planejamento"],
+      ["equipe", "Equipe e permissões"],
+      ["melhorias", "100 melhorias"],
+      ["tarefas", "Tarefas"],
+      ["relatórios", "Relatórios e recuperação"],
+      ["alertas", "Alertas"],
       ["operação", "Operação"],
       ["privacidade", "Privacidade"],
       ["histórico", "Histórico"],
@@ -38,6 +50,8 @@ export const adminGroups = [
   },
 ];
 export const authorTabs = [
+  "perguntas",
+  "avaliacoes",
   "resumo",
   "materiais",
   "publicar",
@@ -47,6 +61,9 @@ export const authorTabs = [
   "correcoes",
 ];
 const accountViews = [
+  "licencas",
+  "assinaturas",
+  "servicos",
   "biblioteca",
   "favoritos",
   "pedidos",
@@ -57,13 +74,15 @@ const accountViews = [
   "correcoes",
 ];
 export function workspaceFor(view: string): Workspace {
-  return view === "admin"
-    ? "admin"
-    : view === "autores"
-      ? "autor"
-      : accountViews.includes(view)
-        ? "estudante"
-        : "loja";
+  return view === "equipe"
+    ? "staff"
+    : view === "admin"
+      ? "admin"
+      : view === "autores"
+        ? "autor"
+        : accountViews.includes(view)
+          ? "estudante"
+          : "loja";
 }
 export function homeFor(user: { admin: boolean } | null) {
   return user ? (user.admin ? "admin" : "biblioteca") : "inicio";

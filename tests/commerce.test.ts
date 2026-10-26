@@ -61,7 +61,8 @@ test("classificação antiga mantém curso e usa área e tipo novos", () => {
   assert.equal(p.course, "Medicina Veterinária");
   assert.equal(p.format, "Resumos e apostilas");
   assert.equal(p.level, "Graduação");
-  assert.equal(materialTypes.length, 10);
+  assert.equal(materialTypes.length, 11);
+  assert(materialTypes.includes("Cursos e trilhas"));
   assert.equal(Object.keys(areas).length, 9);
   assert.equal(
     fileMime("planilha.xlsx"),

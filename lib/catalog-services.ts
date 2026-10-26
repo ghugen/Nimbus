@@ -1,3 +1,5 @@
+import { releaseDuePublications } from "./publication-schedule";
+import { orderAccess } from "./licenses";
 import { seed, type Product } from "./catalog";
 import { normalizeProduct } from "./taxonomy";
 export type StoreRuntime = {
@@ -41,6 +43,7 @@ export function parseBundle(v: unknown) {
   return [...new Set(v)] as string[];
 }
 export async function publicProducts(env: StoreRuntime) {
+  await releaseDuePublications(env);
   const db = (
     await env.DB.prepare(
       "SELECT p.*,u.author_slug FROM products p LEFT JOIN users u ON u.id=p.author_id WHERE p.status='published'",
@@ -54,7 +57,7 @@ export async function publicProducts(env: StoreRuntime) {
   );
   const ratings = (
     await env.DB.prepare(
-      "SELECT product_id,AVG(rating) rating,COUNT(*) review_count FROM reviews GROUP BY product_id",
+      "SELECT r.product_id,AVG(r.rating) rating,COUNT(*) review_count FROM reviews r LEFT JOIN review_moderation m ON m.review_id=r.id WHERE COALESCE(m.status,'visible')='visible' GROUP BY r.product_id",
     ).all<{ product_id: string; rating: number; review_count: number }>()
   ).results;
   const ownership = (
@@ -80,15 +83,21 @@ export async function entitlement(
   productId: string,
 ) {
   const direct = await env.DB.prepare(
-    "SELECT i.* FROM order_items i JOIN orders o ON o.id=i.order_id WHERE o.user_id=? AND o.status='paid' AND i.product_id=? LIMIT 1",
+    `SELECT i.* FROM order_items i JOIN orders o ON o.id=i.order_id WHERE ${orderAccess} AND o.status='paid' AND i.product_id=? LIMIT 1`,
   )
-    .bind(userId, productId)
+    .bind(userId, userId, productId)
     .first<Record<string, unknown>>();
   if (direct) return direct;
-  return env.DB.prepare(
-    "SELECT a.* FROM order_assets a JOIN orders o ON o.id=a.order_id WHERE o.user_id=? AND o.status='paid' AND a.product_id=? LIMIT 1",
+  const child = await env.DB.prepare(
+    `SELECT a.* FROM order_assets a JOIN orders o ON o.id=a.order_id WHERE ${orderAccess} AND o.status='paid' AND a.product_id=? LIMIT 1`,
   )
-    .bind(userId, productId)
+    .bind(userId, userId, productId)
+    .first<Record<string, unknown>>();
+  if (child) return child;
+  return env.DB.prepare(
+    "SELECT json_extract(a.value,'$.product_id') product_id,json_extract(a.value,'$.title') title,json_extract(a.value,'$.file_key') file_key,json_extract(a.value,'$.file_name') file_name,json_extract(a.value,'$.content') content FROM subscriptions s,json_each(s.assets) a WHERE s.user_id=? AND s.status='active' AND s.expires>? AND json_extract(a.value,'$.product_id')=? LIMIT 1",
+  )
+    .bind(userId, new Date().toISOString(), productId)
     .first<Record<string, unknown>>();
 }
 export async function validateBundle(

@@ -1,4 +1,11 @@
 "use client";
+import { disciplineSlug } from "@/lib/discipline";
+import { PreviewGallery } from "./preview-gallery";
+import {
+  ProductInformation,
+  RelatedMaterials,
+  FollowAuthor,
+} from "./product-information";
 import { useEffect, useState } from "react";
 import { BrandGlyph } from "./brand-glyph";
 import { MeasurementPreferences } from "./measurement-preferences";
@@ -129,23 +136,11 @@ export function PublicMaterial({ product: p }: { product: Product }) {
             )}
             <h3>Trecho de amostra</h3>
             <pre className="free-reader">{p.preview}</pre>
-            {Array.from({ length: p.preview_count || 0 }, (_, i) => (
-              <details
-                className="preview-page"
-                key={i}
-                onToggle={(e) => {
-                  if (e.currentTarget.open) metric(p.id, "preview");
-                }}
-              >
-                <summary>Ver página de prévia {i + 1}</summary>
-                <img
-                  className="material-preview"
-                  src={"/api/asset/" + p.id + "/preview/" + i}
-                  alt={"Página de amostra " + (i + 1)}
-                  loading="lazy"
-                />
-              </details>
-            ))}
+            <PreviewGallery
+              id={p.id}
+              count={p.preview_count || 0}
+              title={p.title}
+            />
             {p.sources && (
               <>
                 <h3>Referências e fontes</h3>
@@ -186,6 +181,17 @@ export function PublicMaterial({ product: p }: { product: Product }) {
           </aside>
         </div>
       </main>
+      <div className="container">
+        <a
+          className="text-link"
+          href={"/disciplinas/" + disciplineSlug(p.subject)}
+        >
+          Mais materiais de {p.subject} ↗
+        </a>
+        <ProductInformation product={p} />
+        {p.author_slug && <FollowAuthor slug={p.author_slug} />}
+        <RelatedMaterials productId={p.id} />
+      </div>
       <MeasurementPreferences />
       <footer className="container public-footer">
         <a href="/#privacidade">Privacidade</a>

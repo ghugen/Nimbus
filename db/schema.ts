@@ -187,6 +187,7 @@ export const editorialEvents = sqliteTable("editorial_events", {
   action: text("action").notNull(),
   feedback: text("feedback").notNull(),
   reviewer: text("reviewer").notNull(),
+  checks: text("checks").notNull().default("[]"),
   created: text("created").notNull(),
 });
 export const orderAssets = sqliteTable("order_assets", {
@@ -287,5 +288,298 @@ export const commercialPlan = sqliteTable("commercial_plan", {
   status: text("status").notNull().default("evaluate"),
   priority: text("priority").notNull().default("normal"),
   notes: text("notes").notNull().default(""),
+  updated: text("updated").notNull(),
+});
+
+export const readerStates = sqliteTable("reader_states", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  page: integer("page").notNull().default(1),
+  zoom: integer("zoom").notNull().default(100),
+  folder: text("folder").notNull().default(""),
+  status: text("status").notNull().default("not_started"),
+  nextReview: text("next_review").notNull().default(""),
+  updated: text("updated").notNull(),
+});
+export const pageAnnotations = sqliteTable("page_annotations", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  page: integer("page").notNull(),
+  kind: text("kind").notNull(),
+  text: text("text").notNull(),
+  created: text("created").notNull(),
+});
+export const savedSearches = sqliteTable("saved_searches", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull(),
+  filters: text("filters").notNull(),
+  created: text("created").notNull(),
+});
+export const authorFollows = sqliteTable("author_follows", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  authorId: text("author_id").notNull(),
+  notify: integer("notify").notNull().default(0),
+  created: text("created").notNull(),
+});
+export const studentPreferences = sqliteTable("student_preferences", {
+  userId: text("user_id").primaryKey(),
+  interests: text("interests").notNull().default("[]"),
+  updated: text("updated").notNull(),
+});
+export const productExtras = sqliteTable("product_extras", {
+  productId: text("product_id").primaryKey(),
+  prerequisites: text("prerequisites").notNull().default(""),
+  audience: text("audience").notNull().default(""),
+  exclusions: text("exclusions").notNull().default(""),
+  requirements: text("requirements").notNull().default(""),
+  faq: text("faq").notNull().default(""),
+  checklist: text("checklist").notNull().default("{}"),
+  updated: text("updated").notNull(),
+});
+export const authorDrafts = sqliteTable("author_drafts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  data: text("data").notNull(),
+  revision: integer("revision").notNull().default(1),
+  updated: text("updated").notNull(),
+});
+export const productChanges = sqliteTable("product_changes", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull(),
+  actor: text("actor").notNull(),
+  snapshot: text("snapshot").notNull(),
+  created: text("created").notNull(),
+});
+export const productQuestions = sqliteTable("product_questions", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull(),
+  userId: text("user_id").notNull(),
+  question: text("question").notNull(),
+  answer: text("answer").notNull().default(""),
+  status: text("status").notNull().default("pending"),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+export const refundRequests = sqliteTable("refund_requests", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull().unique(),
+  userId: text("user_id").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("requested"),
+  response: text("response").notNull().default(""),
+  providerId: text("provider_id"),
+  amount: integer("amount").notNull().default(0),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+export const operationTasks = sqliteTable("operation_tasks", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  owner: text("owner").notNull().default(""),
+  deadline: text("deadline").notNull().default(""),
+  status: text("status").notNull().default("open"),
+  notes: text("notes").notNull().default(""),
+  updated: text("updated").notNull(),
+});
+export const roadmapTasks = sqliteTable("roadmap_tasks", {
+  id: integer("id").primaryKey(),
+  owner: text("owner").notNull().default(""),
+  deadline: text("deadline").notNull().default(""),
+  status: text("status").notNull().default("open"),
+  notes: text("notes").notNull().default(""),
+  updated: text("updated").notNull(),
+});
+export const qualityReports = sqliteTable("quality_reports", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull(),
+  userId: text("user_id").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("open"),
+  response: text("response").notNull().default(""),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+export const reviewModeration = sqliteTable("review_moderation", {
+  reviewId: text("review_id").primaryKey(),
+  status: text("status").notNull().default("visible"),
+  response: text("response").notNull().default(""),
+  reason: text("reason").notNull().default(""),
+  clarity: integer("clarity"),
+  presentation: integer("presentation"),
+  updated: text("updated").notNull(),
+});
+export const uploadChecks = sqliteTable("upload_checks", {
+  productId: text("product_id").primaryKey(),
+  hash: text("hash").notNull(),
+  size: integer("size").notNull(),
+  extension: text("extension").notNull(),
+  result: text("result").notNull(),
+  created: text("created").notNull(),
+});
+export const operationEvents = sqliteTable("operation_events", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  created: text("created").notNull(),
+});
+export const rateBuckets = sqliteTable("rate_buckets", {
+  id: text("id").primaryKey(),
+  count: integer("count").notNull().default(1),
+  expires: text("expires").notNull(),
+});
+
+export const learningPackages = sqliteTable("learning_packages", {
+  publishedCards: text("published_cards").notNull().default("[]"),
+  publishedQuestions: text("published_questions").notNull().default("[]"),
+  publishedLessons: text("published_lessons").notNull().default("[]"),
+  productId: text("product_id").primaryKey(),
+  cards: text("cards").notNull().default("[]"),
+  questions: text("questions").notNull().default("[]"),
+  lessons: text("lessons").notNull().default("[]"),
+  updated: text("updated").notNull(),
+});
+export const lessonProgress = sqliteTable("lesson_progress", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  lessonId: text("lesson_id").notNull(),
+  completed: integer("completed").notNull().default(0),
+  updated: text("updated").notNull(),
+});
+export const cardReviews = sqliteTable("card_reviews", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  cardId: text("card_id").notNull(),
+  due: text("due").notNull(),
+  level: text("level").notNull(),
+  updated: text("updated").notNull(),
+});
+export const quizAttempts = sqliteTable("quiz_attempts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  score: integer("score").notNull(),
+  total: integer("total").notNull(),
+  answers: text("answers").notNull(),
+  created: text("created").notNull(),
+});
+export const serviceOffers = sqliteTable("service_offers", {
+  id: text("id").primaryKey(),
+  authorId: text("author_id").notNull(),
+  title: text("title").notNull(),
+  kind: text("kind").notNull(),
+  description: text("description").notNull(),
+  price: integer("price").notNull(),
+  duration: integer("duration").notNull(),
+  capacity: integer("capacity").notNull(),
+  status: text("status").notNull().default("draft"),
+  terms: text("terms").notNull(),
+  requiredPlanId: text("required_plan_id").notNull().default(""),
+  created: text("created").notNull(),
+});
+export const serviceSlots = sqliteTable("service_slots", {
+  id: text("id").primaryKey(),
+  offerId: text("offer_id").notNull(),
+  starts: text("starts").notNull(),
+  ends: text("ends").notNull(),
+  meetingUrl: text("meeting_url").notNull().default(""),
+  status: text("status").notNull().default("open"),
+});
+export const serviceBookings = sqliteTable("service_bookings", {
+  id: text("id").primaryKey(),
+  offerId: text("offer_id").notNull(),
+  slotId: text("slot_id").notNull(),
+  userId: text("user_id").notNull(),
+  status: text("status").notNull().default("requested"),
+  price: integer("price").notNull().default(0),
+  sessionId: text("session_id"),
+  checkoutUrl: text("checkout_url"),
+  created: text("created").notNull(),
+});
+export const serviceQuotes = sqliteTable("service_quotes", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  offerId: text("offer_id").notNull(),
+  brief: text("brief").notNull(),
+  status: text("status").notNull().default("requested"),
+  price: integer("price"),
+  response: text("response").notNull().default(""),
+  delivery: text("delivery").notNull().default(""),
+  paymentStatus: text("payment_status").notNull().default("unpaid"),
+  sessionId: text("session_id"),
+  checkoutUrl: text("checkout_url"),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+export const subscriptionPlans = sqliteTable("subscription_plans", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  amount: integer("amount").notNull().default(0),
+  interval: text("interval").notNull().default("month"),
+  stripePriceId: text("stripe_price_id").notNull().default(""),
+  productIds: text("product_ids").notNull().default("[]"),
+  status: text("status").notNull().default("draft"),
+  created: text("created").notNull(),
+});
+export const subscriptions = sqliteTable("subscriptions", {
+  assets: text("assets").notNull().default("[]"),
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  planId: text("plan_id").notNull(),
+  productIds: text("product_ids").notNull().default("[]"),
+  providerId: text("provider_id"),
+  customerId: text("customer_id"),
+  sessionId: text("session_id"),
+  checkoutUrl: text("checkout_url"),
+  status: text("status").notNull().default("pending"),
+  expires: text("expires").notNull().default(""),
+  created: text("created").notNull(),
+});
+export const staffRoles = sqliteTable("staff_roles", {
+  userId: text("user_id").primaryKey(),
+  reviewer: integer("reviewer").notNull().default(0),
+  support: integer("support").notNull().default(0),
+  updated: text("updated").notNull(),
+});
+export const publicationSchedule = sqliteTable("publication_schedule", {
+  productId: text("product_id").primaryKey(),
+  releaseAt: text("release_at").notNull(),
+  approved: integer("approved").notNull().default(0),
+  created: text("created").notNull(),
+});
+export const orderLicenses = sqliteTable("order_licenses", {
+  orderId: text("order_id").primaryKey(),
+  seats: integer("seats").notNull().default(1),
+  gift: integer("gift").notNull().default(0),
+});
+export const licenseInvites = sqliteTable("license_invites", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  email: text("email").notNull(),
+  userId: text("user_id"),
+  created: text("created").notNull(),
+});
+
+export const clubPosts = sqliteTable("club_posts", {
+  id: text("id").primaryKey(),
+  planId: text("plan_id").notNull(),
+  title: text("title").notNull(),
+  text: text("text").notNull(),
+  created: text("created").notNull(),
+});
+
+export const profileVerifications = sqliteTable("profile_verifications", {
+  userId: text("user_id").primaryKey(),
+  status: text("status").notNull().default("unverified"),
+  label: text("label").notNull().default(""),
+  evidence: text("evidence").notNull().default(""),
+  reviewer: text("reviewer").notNull(),
   updated: text("updated").notNull(),
 });
