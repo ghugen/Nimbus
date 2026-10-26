@@ -10,6 +10,7 @@ export function OrderTools({
   order: { id: string; status: string; total: number };
 }) {
   const [detail, setDetail] = useState<{
+      update_terms?: { product_id: string; terms: string }[];
       items: { title: string; price: number }[];
       discount: { code: string; discount: number } | null;
       refund: { status: string; response: string; reason: string } | null;
@@ -55,7 +56,7 @@ export function OrderTools({
           Baixar comprovante
         </button>
       )}
-      {["pending","failed"].includes(order.status) && (
+      {["pending", "failed"].includes(order.status) && (
         <button
           className="btn secondary small"
           onClick={async () => {
@@ -72,6 +73,16 @@ export function OrderTools({
       )}
       {detail && (
         <>
+          {!!detail.update_terms?.length && (
+            <details>
+              <summary>Condições de atualização desta aquisição</summary>
+              {detail.update_terms.map((t) => (
+                <p className="pre-line" key={t.product_id}>
+                  {t.terms}
+                </p>
+              ))}
+            </details>
+          )}
           <h4>Valores efetivamente pagos</h4>
           {detail.items.map((i, index) => (
             <p key={index}>

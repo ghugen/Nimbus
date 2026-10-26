@@ -43,3 +43,26 @@ export async function metric(
     body: JSON.stringify({ productId, kind, visitor, consent: true }),
   }).catch(() => {});
 }
+
+export async function searchSignal(filters: {
+  query: string;
+  course: string;
+  subject: string;
+  format: string;
+}) {
+  if (
+    localStorage.getItem("nimbus-analytics") !== "yes" ||
+    localStorage.getItem("nimbus-search-analytics-v1") !== "yes"
+  )
+    return;
+  let visitor = sessionStorage.getItem("nimbus-visitor");
+  if (!visitor) {
+    visitor = crypto.randomUUID();
+    sessionStorage.setItem("nimbus-visitor", visitor);
+  }
+  await signedFetch("/api/search-signal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...filters, visitor, consent: true }),
+  });
+}

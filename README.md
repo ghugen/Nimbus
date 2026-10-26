@@ -20,6 +20,10 @@ A lista de 66 recursos solicitados está em [docs/ESCOPO_CONSOLIDADO.md](docs/ES
 
 Novas áreas: mural moderado, indicações e afiliados, propostas institucionais com arquivos/preços congelados, fila de contratos/documentos fiscais externos, revisão editorial periódica, conferência de permissões, histórico de atendimento e códigos opacos em cópias de PDF compatíveis. Nenhuma assinatura eletrônica, emissão fiscal, repasse automático ou integração externa é apresentada como ativa sem a configuração correspondente.
 
+## Experiência e preparação para lançamento
+
+A orientação de estudantes está em `/comecar`; amostras em texto em `/amostras/:id`; o roteiro de usabilidade em `/avaliar`. A administração reúne prontidão, procura por temas, feedback privado e relatos de usabilidade. Autores têm primeiros passos, checklist por produto e condições de atualização registradas por aquisição. Veja [docs/EXPERIENCIA_E_LANCAMENTO.md](docs/EXPERIENCIA_E_LANCAMENTO.md) para entregas e limites.
+
 ## Recursos implementados
 
 - Identidade Nimbus, página inicial, navegação por áreas e layout responsivo.

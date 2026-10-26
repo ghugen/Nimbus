@@ -1,3 +1,7 @@
+import {
+  studentExperience,
+  updateTermStatements,
+} from "@/lib/student-experience";
 import { STRIPE_API_VERSION, CHECKOUT_INTEGRATION } from "@/lib/stripe-config";
 import { supportThread } from "@/lib/support-thread";
 import { operationDocuments } from "@/lib/operation-documents";
@@ -440,6 +444,7 @@ async function dispatch(req: Request) {
       fail("Origem da solicitação inválida.", 403);
   }
   for (const handler of [
+    studentExperience,
     supportThread,
     operationDocuments,
     studyAssistant,
@@ -600,6 +605,18 @@ async function dispatch(req: Request) {
       ),
       support_messages: await all(
         "SELECT m.kind,m.message,m.created FROM ticket_messages m JOIN tickets t ON t.id=m.ticket_id WHERE t.user_id=?",
+        u.id,
+      ),
+      study_feedback: await all(
+        "SELECT product_id,helpfulness,difficulty,missing,created,updated FROM study_feedback WHERE user_id=?",
+        u.id,
+      ),
+      usability_sessions: await all(
+        "SELECT tasks,device,notes,created FROM usability_sessions WHERE user_id=?",
+        u.id,
+      ),
+      update_terms: await all(
+        "SELECT t.order_id,t.product_id,t.terms,t.created FROM order_update_terms t JOIN orders o ON o.id=t.order_id WHERE o.user_id=?",
         u.id,
       ),
       documents: await all(
@@ -967,6 +984,14 @@ async function dispatch(req: Request) {
       now(),
     );
     await DB.batch([
+      ...(await updateTermStatements(
+        runtime(),
+        id,
+        selected.flatMap((p) => [
+          p.id,
+          ...(bundleMap.get(p.id) || []).map((c) => c.id),
+        ]),
+      )),
       ...(referral ? [referralStatement(runtime(), u, id, referral)] : []),
       DB.prepare(
         "INSERT INTO orders (id,user_id,status,total,created) VALUES(?,?,?,?,?)",

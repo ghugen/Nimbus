@@ -734,3 +734,42 @@ export const ticketMessages = sqliteTable("ticket_messages", {
   message: text("message").notNull(),
   created: text("created").notNull(),
 });
+
+export const productExperience = sqliteTable("product_experience", {
+  productId: text("product_id").primaryKey(),
+  updatePolicy: text("update_policy").notNull(),
+  sampleDescriptions: text("sample_descriptions").notNull().default("[]"),
+  updated: text("updated").notNull(),
+});
+export const studyFeedback = sqliteTable("study_feedback", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull(),
+  userId: text("user_id").notNull(),
+  helpfulness: integer("helpfulness").notNull(),
+  difficulty: text("difficulty").notNull(),
+  missing: text("missing").notNull().default(""),
+  created: text("created").notNull(),
+  updated: text("updated").notNull(),
+});
+export const searchSignals = sqliteTable("search_signals", {
+  id: text("id").primaryKey(),
+  course: text("course").notNull(),
+  subject: text("subject").notNull(),
+  kind: text("kind").notNull(),
+  created: text("created").notNull(),
+});
+export const usabilitySessions = sqliteTable("usability_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  tasks: text("tasks").notNull(),
+  device: text("device").notNull(),
+  notes: text("notes").notNull(),
+  created: text("created").notNull(),
+});
+export const orderUpdateTerms = sqliteTable("order_update_terms", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  productId: text("product_id").notNull(),
+  terms: text("terms").notNull(),
+  created: text("created").notNull(),
+});

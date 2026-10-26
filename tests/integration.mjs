@@ -2974,6 +2974,391 @@ try {
     );
     checks++;
   }
+  {
+    // Editorial transparency, purchase terms, private feedback and consented demand signals.
+    const id = "experience-free-fixture",
+      at = new Date().toISOString();
+    db.prepare(
+      "INSERT INTO products(id,author_id,title,description,category,subject,course,format,price,pages,author,preview,status,file_key,file_name,accepted_bps,accepted_owned,objectives,sources,created,updated) VALUES(?,'admin','Guia de revisão com fontes','Guia original com exemplos de estudo e questões para revisão','Saúde','Métodos','Graduação','Guias práticos',0,1,'Nimbus','Esta amostra textual apresenta objetivos e um exemplo de revisão ativa.','published','workflow-original.pdf','original.pdf',0,1,'Explicar os fundamentos da revisão ativa.','Referências de estudo conferidas pelo autor.',?,?)",
+    ).run(id, at, at);
+    await expectStatus(
+      "material-experience?id=not-a-product",
+      { user: null },
+      404,
+    );
+    const initial = await (
+      await expectStatus("material-experience?id=" + id, { user: null }, 200)
+    ).json();
+    assert(initial.transparency.items.some((i) => i.status === "registered"));
+    assert(!initial.transparency.items.some((i) => i.status === "reviewed"));
+    checks++;
+    await expectStatus(
+      "experience-editor",
+      {
+        user: "policy-outsider",
+        body: {
+          product_id: id,
+          update_policy:
+            "Política não autorizada para testar alterações indevidas.",
+          sample_descriptions: [],
+          confirmed: true,
+        },
+      },
+      403,
+    );
+    const oldTerms =
+      "Inclui o arquivo adquirido e as versões publicadas deste mesmo material. Não inclui novos produtos nem mentorias. Política de teste A.";
+    await expectStatus(
+      "experience-editor",
+      {
+        user: "admin",
+        body: {
+          product_id: id,
+          update_policy: oldTerms,
+          sample_descriptions: [
+            "Esquema de revisão com perguntas e respostas.",
+          ],
+          confirmed: true,
+        },
+      },
+      200,
+    );
+    assert.equal(
+      db.prepare("SELECT status FROM products WHERE id=?").get(id).status,
+      "draft",
+    );
+    checks++;
+    await expectStatus("material-experience?id=" + id, { user: null }, 404);
+    const launch = await (
+      await expectStatus("launch-check?id=" + id, { user: "admin" }, 200)
+    ).json();
+    assert(launch.items.find((i) => i.id === "file").ready);
+    assert(launch.items.find((i) => i.id === "updates").ready);
+    assert(!launch.items.find((i) => i.id === "review").ready);
+    checks++;
+    await expectStatus(
+      "launch-check?id=" + id,
+      { user: "policy-outsider" },
+      403,
+    );
+    await expectStatus(
+      "admin",
+      {
+        user: "admin",
+        body: {
+          action: "product",
+          id,
+          status: "published",
+          reviewed: true,
+          review_checks: ["sources", "legibility", "rights"],
+        },
+      },
+      200,
+    );
+    const reviewed = await (
+      await call("material-experience?id=" + id, { user: null })
+    ).json();
+    assert.equal(
+      reviewed.sample_descriptions[0],
+      "Esquema de revisão com perguntas e respostas.",
+    );
+    assert(
+      reviewed.transparency.items.find((i) => i.id === "sources").status ===
+        "reviewed",
+    );
+    assert(
+      reviewed.transparency.items.find((i) => i.id === "answers").status ===
+        "not_recorded",
+    );
+    checks++;
+    const acquisition = await (
+      await expectStatus(
+        "checkout",
+        {
+          user: "policy-student",
+          body: { ids: [id], accepted: true, request_id: crypto.randomUUID() },
+        },
+        200,
+      )
+    ).json();
+    const frozen = db
+      .prepare(
+        "SELECT terms FROM order_update_terms WHERE order_id=? AND product_id=?",
+      )
+      .get(acquisition.order, id);
+    assert.equal(frozen.terms, oldTerms);
+    checks++;
+    const newerTerms =
+      "Inclui o arquivo adquirido e as versões publicadas deste mesmo material, sem novos produtos ou suporte individual. Política de teste B.";
+    await expectStatus(
+      "experience-editor",
+      {
+        user: "admin",
+        body: {
+          product_id: id,
+          update_policy: newerTerms,
+          sample_descriptions: [],
+          confirmed: true,
+        },
+      },
+      200,
+    );
+    assert.equal(
+      db
+        .prepare(
+          "SELECT terms FROM order_update_terms WHERE order_id=? AND product_id=?",
+        )
+        .get(acquisition.order, id).terms,
+      oldTerms,
+    );
+    checks++;
+    const historic = await (
+      await call("order-detail?id=" + acquisition.order, {
+        user: "policy-student",
+      })
+    ).json();
+    assert.equal(historic.update_terms[0].terms, oldTerms);
+    checks++;
+    await expectStatus(
+      "study-feedback",
+      {
+        user: "policy-outsider",
+        body: {
+          product_id: id,
+          helpfulness: 5,
+          difficulty: "adequate",
+          consent: true,
+        },
+      },
+      403,
+    );
+    await expectStatus(
+      "study-feedback",
+      {
+        user: "policy-student",
+        body: { product_id: id, helpfulness: 5, difficulty: "adequate" },
+      },
+      400,
+    );
+    await expectStatus(
+      "study-feedback",
+      {
+        user: "policy-student",
+        body: {
+          product_id: id,
+          helpfulness: 5,
+          difficulty: "adequate",
+          missing: "Gostaria de mais exemplos originais.",
+          consent: true,
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "study-feedback",
+      {
+        user: "policy-student",
+        body: {
+          product_id: id,
+          helpfulness: 4,
+          difficulty: "too_hard",
+          missing: "Um glossário ajudaria.",
+          consent: true,
+        },
+      },
+      200,
+    );
+    assert.equal(
+      db
+        .prepare("SELECT COUNT(*) n FROM study_feedback WHERE product_id=?")
+        .get(id).n,
+      1,
+    );
+    checks++;
+    await expectStatus(
+      "feedback-report?id=" + id,
+      { user: "policy-outsider" },
+      403,
+    );
+    const report = await (
+      await call("feedback-report?id=" + id, { user: "admin" })
+    ).json();
+    assert.equal(report.feedback[0].helpfulness, 4);
+    assert(!("user_id" in report.feedback[0]));
+    checks++;
+    const visitor = crypto.randomUUID();
+    await expectStatus(
+      "search-signal",
+      {
+        user: null,
+        body: {
+          query: "quero um tema indisponível",
+          visitor,
+          course: "Graduação",
+          subject: "Métodos",
+          consent: false,
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "search-signal",
+      {
+        user: null,
+        body: {
+          query: "quero um tema indisponível",
+          visitor,
+          course: "Graduação",
+          subject: "Métodos",
+          consent: true,
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "search-signal",
+      {
+        user: null,
+        body: {
+          query: "quero um tema indisponível",
+          visitor,
+          course: "Graduação",
+          subject: "Métodos",
+          consent: true,
+        },
+      },
+      200,
+    );
+    assert.equal(
+      db.prepare("SELECT COUNT(*) n FROM search_signals").get().n,
+      1,
+    );
+    assert.equal(
+      db.prepare("SELECT kind FROM search_signals").get().kind,
+      "empty",
+    );
+    assert(
+      !db
+        .prepare("PRAGMA table_info(search_signals)")
+        .all()
+        .some((c) => ["query", "visitor", "user_id"].includes(c.name)),
+    );
+    checks++;
+    await expectStatus(
+      "search-signal",
+      {
+        user: null,
+        body: {
+          query: "foo",
+          visitor,
+          course: "Curso inventado",
+          consent: true,
+        },
+      },
+      400,
+    );
+    await expectStatus("demand-insights", { user: "policy-student" }, 403);
+    const insights = await (
+      await expectStatus("demand-insights", { user: "admin" }, 200)
+    ).json();
+    assert(
+      insights.searches.some(
+        (i) => i.kind === "empty" && i.course === "Graduação",
+      ),
+    );
+    checks++;
+    await expectStatus("launch-readiness", { user: "policy-student" }, 403);
+    await expectStatus(
+      "launch-readiness",
+      {
+        user: "admin",
+        body: {
+          id: "payments",
+          checked: true,
+          notes:
+            "Tentativa de alterar configuração automática sem credenciais.",
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "launch-readiness",
+      {
+        user: "admin",
+        body: {
+          id: "support_test",
+          checked: true,
+          notes:
+            "Conferido o atendimento com abertura, resposta e reabertura de chamado.",
+        },
+      },
+      200,
+    );
+    const readiness = await (
+      await call("launch-readiness", { user: "admin" })
+    ).json();
+    assert(readiness.manual.support_test.checked);
+    assert.equal(
+      readiness.automated.find((i) => i.id === "email").ready,
+      false,
+    );
+    checks++;
+    const tasks = (
+      await (await call("usability-tasks", { user: null })).json()
+    ).tasks.map((t) => ({ id: t.id, result: "not_tested" }));
+    await expectStatus(
+      "usability-feedback",
+      {
+        user: "policy-student",
+        body: {
+          tasks,
+          device: "mobile",
+          notes: "Roteiro de teste para validar o formulário.",
+          consent: false,
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "usability-feedback",
+      {
+        user: "policy-student",
+        body: {
+          tasks,
+          device: "mobile",
+          notes: "Roteiro de teste para validar o formulário.",
+          consent: true,
+        },
+      },
+      200,
+    );
+    await expectStatus("usability-feedback", { user: "policy-student" }, 403);
+    const sessions = (
+      await (await call("usability-feedback", { user: "admin" })).json()
+    ).sessions;
+    assert.equal(sessions.length, 1);
+    assert(!("user_id" in sessions[0]));
+    checks++;
+    const exported = await (
+      await call("privacy-export", { user: "policy-student" })
+    ).json();
+    assert.equal(exported.study_feedback.length, 1);
+    assert.equal(exported.usability_sessions.length, 1);
+    checks++;
+    await expectStatus(
+      "study-feedback",
+      { user: "policy-student", body: { product_id: id, action: "delete" } },
+      200,
+    );
+    assert.equal(
+      db
+        .prepare("SELECT COUNT(*) n FROM study_feedback WHERE product_id=?")
+        .get(id).n,
+      0,
+    );
+    checks++;
+  }
+
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );

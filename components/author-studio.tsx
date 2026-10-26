@@ -1,5 +1,11 @@
 "use client";
-import {ProductOperations} from "./editorial-operations";
+import {
+  AuthorOnboarding,
+  ExperienceEditor,
+  LaunchChecklist,
+} from "./experience-panels";
+import { ProductStudyInsights } from "./experience-admin";
+import { ProductOperations } from "./editorial-operations";
 import { LearningAuthor } from "./learning-experience";
 import {
   PublicationPreview,
@@ -312,6 +318,7 @@ export function AuthorStudio({
       <div className="tabs">
         {[
           ["resumo", "Resumo"],
+          ["comecar", "Primeiros passos"],
           ["materiais", "Meus materiais"],
           ["publicar", "Publicar"],
           ["perfil", "Minha página"],
@@ -379,6 +386,7 @@ export function AuthorStudio({
         <p>Carregando sua área…</p>
       ) : (
         <>
+          {tab === "comecar" && <AuthorOnboarding />}
           {tab === "resumo" && (
             <AuthorOverview
               products={data.products}
@@ -456,7 +464,13 @@ export function AuthorStudio({
                       }}
                     />
                     <PublicationSchedule id={p.id} />
-                    <ProductOperations id={p.id}/>
+                    <ProductOperations id={p.id} />
+                    <ExperienceEditor
+                      id={p.id}
+                      onSaved={() => load().catch((e) => setError(e.message))}
+                    />
+                    <LaunchChecklist id={p.id} />
+                    <ProductStudyInsights id={p.id} />
                     <CoverTemplates
                       id={p.id}
                       title={p.title}

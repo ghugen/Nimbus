@@ -1,5 +1,6 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import {callApi} from "./commerce-panels";
 import { metric } from "@/lib/client-auth";
 export function PreviewGallery({
   id,
@@ -10,6 +11,20 @@ export function PreviewGallery({
   count: number;
   title: string;
 }) {
+  const [descriptions, setDescriptions] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    if (count)
+      callApi("material-experience?id=" + encodeURIComponent(id))
+        .then((d) => {
+          if (alive && Array.isArray(d?.sample_descriptions))
+            setDescriptions(d.sample_descriptions);
+        })
+        .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [id, count]);
   const [index, setIndex] = useState(0),
     start = useRef(0);
   if (!count) return null;
@@ -51,10 +66,14 @@ export function PreviewGallery({
       >
         <img
           src={"/api/asset/" + id + "/preview/" + index}
-          alt={"Amostra " + (index + 1) + " de " + title}
+          alt={descriptions[index] || "Amostra " + (index + 1) + " de " + title}
           loading="lazy"
         />
       </div>
+      {descriptions[index] && <p className="muted">{descriptions[index]}</p>}
+      <a className="text-link" href={"/amostras/" + encodeURIComponent(id)}>
+        Ler a amostra em texto e ajustar o tamanho da fonte ↗
+      </a>
       <div className="preview-dots">
         {Array.from({ length: count }, (_, i) => (
           <button

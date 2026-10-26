@@ -707,7 +707,12 @@ type Institution = {
   price: number | null;
   scope: string;
   expires: string;
-  items: { product_id: string; title: string; price: number }[];
+  items: {
+    product_id: string;
+    title: string;
+    price: number;
+    update_policy?: string;
+  }[];
 };
 export function InstitutionPanel({ admin = false }: { admin?: boolean }) {
   const p = usePanel<{ requests: Institution[] }>(
@@ -823,6 +828,11 @@ export function InstitutionPanel({ admin = false }: { admin?: boolean }) {
                 {r.items.map((i) => (
                   <li key={i.product_id}>
                     {i.title} · {money(i.price)} pelo conjunto de licenças
+                    {i.update_policy && (
+                      <p className="muted pre-line">
+                        Atualizações: {i.update_policy}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -1,4 +1,16 @@
 "use client";
+import {
+  GettingStarted,
+  MaterialConfidence,
+  StudyFeedback,
+} from "@/components/experience-panels";
+import {
+  DemandInsights,
+  FeedbackReport,
+  LaunchReadiness,
+} from "@/components/experience-admin";
+import { UsabilityStudy } from "@/components/usability-study";
+import { searchSignal } from "@/lib/client-auth";
 import { SupportThread } from "@/components/support-thread";
 import { ManagementPanel } from "@/components/management-panel";
 import {
@@ -342,6 +354,18 @@ export default function Nimbus() {
   useEffect(() => {
     setReferral(null);
   }, [cart, seats]);
+  useEffect(() => {
+    if (view !== "catalogo") return;
+    const timer = setTimeout(() => {
+      searchSignal({
+        query,
+        course: course === "Todos" ? "" : course,
+        subject,
+        format: format === "Todos" ? "" : format,
+      }).catch(() => {});
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [query, course, subject, format, view]);
   const organization = useLibraryOrganization(!!user && view === "biblioteca");
   function go(next: string) {
     window.location.hash = next;
@@ -760,6 +784,7 @@ export default function Nimbus() {
           >
             {[
               ["inicio", "Loja"],
+              ["comecar", "Comece por aqui"],
               ["catalogo", "Explorar materiais"],
               ["colecoes", "Coleções"],
               ["gratuitos", "Gratuitos"],
@@ -942,6 +967,7 @@ export default function Nimbus() {
             </div>
           </div>
         )}
+        {view === "comecar" && <GettingStarted />}
         {view === "inicio" && (
           <>
             <section className="hero container">
@@ -2379,6 +2405,10 @@ export default function Nimbus() {
                 <div className="admin-shell">
                   <AdminNavigation active={adminTab} onNavigate={go} />
                   <div className="admin-content">
+                    {adminTab === "procura" && <DemandInsights />}
+                    {adminTab === "feedback" && <FeedbackReport />}
+                    {adminTab === "prontidao" && <LaunchReadiness />}
+                    {adminTab === "usabilidade" && <UsabilityStudy admin />}
                     {adminTab === "resumo" && (
                       <AdminOverview onNavigate={go} name={user.name} />
                     )}
@@ -3001,6 +3031,13 @@ export default function Nimbus() {
                 </p>
                 <h2>Pagamentos e arquivos</h2>
                 <p>
+                  Feedback de estudo e relatos de usabilidade são voluntários e
+                  vinculados à sua conta. A medição opcional de buscas registra
+                  curso, disciplina e presença de resultados, sem guardar a
+                  consulta digitada ou o identificador do visitante; os sinais
+                  são removidos após noventa dias nas próximas gravações.
+                </p>
+                <p>
                   A Nimbus registra códigos individuais de cópia, indicações e
                   solicitações institucionais para operar os recursos
                   contratados. A busca de trechos usa o material autorizado.
@@ -3149,6 +3186,8 @@ export default function Nimbus() {
               Para instituições
             </button>
             <a href="/experimentar">Experimente grátis</a>
+            <a href="/comecar">Comece por aqui</a>
+            <a href="/avaliar">Avaliar a experiência</a>
             <button onClick={() => go("biblioteca")}>Minha biblioteca</button>
           </div>
           <div>
@@ -3337,6 +3376,7 @@ export default function Nimbus() {
               )}
             </div>
             <ProductInformation product={detail} />
+            <MaterialConfidence id={detail.id} />
             {detail.author_slug && <FollowAuthor slug={detail.author_slug} />}
             <RelatedMaterials productId={detail.id} />
             <div className="detail-reviews">
@@ -3488,6 +3528,7 @@ export default function Nimbus() {
               <Download size={17} /> Baixar meu arquivo
             </button>
             <LearningExperience productId={reader.product_id} />
+            <StudyFeedback productId={reader.product_id} />
             {(reader.file_name?.toLowerCase().endsWith(".pdf") ||
               products.find((p) => p.id === reader.product_id)
                 ?.public_download) && (

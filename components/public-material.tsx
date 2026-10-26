@@ -1,4 +1,5 @@
 "use client";
+import { MaterialConfidence } from "./experience-panels";
 import { disciplineSlug } from "@/lib/discipline";
 import { PreviewGallery } from "./preview-gallery";
 import {
@@ -189,6 +190,7 @@ export function PublicMaterial({ product: p }: { product: Product }) {
           Mais materiais de {p.subject} ↗
         </a>
         <ProductInformation product={p} />
+        <MaterialConfidence id={p.id} />
         {p.author_slug && <FollowAuthor slug={p.author_slug} />}
         <RelatedMaterials productId={p.id} />
       </div>

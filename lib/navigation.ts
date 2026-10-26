@@ -1,6 +1,12 @@
 export type Workspace = "loja" | "estudante" | "autor" | "admin" | "staff";
 export const adminGroups = [
-  { label: "Visão geral", items: [["resumo", "Resumo"]] },
+  {
+    label: "Visão geral",
+    items: [
+      ["resumo", "Resumo"],
+      ["prontidao", "Prontidão para lançamento"],
+    ],
+  },
   {
     label: "Catálogo",
     items: [
@@ -22,6 +28,7 @@ export const adminGroups = [
       ["documentos", "Contratos e fiscal"],
       ["reembolsos", "Reembolsos"],
       ["indicadores", "Indicadores"],
+      ["procura", "Procura por temas"],
       ["instituicoes", "Instituições"],
       ["parcerias", "Indicações e afiliados"],
     ],
@@ -37,6 +44,8 @@ export const adminGroups = [
       ["perguntas", "Perguntas"],
       ["denúncias", "Autoria e qualidade"],
       ["avaliações", "Avaliações"],
+      ["feedback", "Feedback de estudo"],
+      ["usabilidade", "Usabilidade"],
       ["verificações", "Credenciais"],
     ],
   },
@@ -57,6 +66,7 @@ export const adminGroups = [
   },
 ];
 export const authorTabs = [
+  "comecar",
   "perguntas",
   "avaliacoes",
   "resumo",
@@ -120,6 +130,7 @@ export function safeReturnTarget(value: string | null) {
   if (
     [
       "inicio",
+      "comecar",
       "catalogo",
       "colecoes",
       "gratuitos",

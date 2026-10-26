@@ -268,7 +268,10 @@ export async function operationsPlus(
         )
       )[0];
     if (!order) fail("Pedido não encontrado.", 404);
-    if (path === "order-retry") {if(method!=="POST")fail("Use o botão Retomar pagamento.",405);return json(await retryOrder(e,u,order,url.origin));}
+    if (path === "order-retry") {
+      if (method !== "POST") fail("Use o botão Retomar pagamento.", 405);
+      return json(await retryOrder(e, u, order, url.origin));
+    }
 
     const items = await rows(
         e,
@@ -280,11 +283,17 @@ export async function operationsPlus(
           await rows(
             e,
             "SELECT code,discount FROM coupon_uses WHERE order_id=? UNION ALL SELECT code,discount FROM referral_sales WHERE order_id=?",
-            id,id,
+            id,
+            id,
           )
         )[0] || null;
     if (path === "order-detail")
       return json({
+        update_terms: await rows(
+          e,
+          "SELECT product_id,terms FROM order_update_terms WHERE order_id=?",
+          order.id,
+        ),
         order: {
           id: order.id,
           status: order.status,

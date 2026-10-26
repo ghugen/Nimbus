@@ -1,3 +1,4 @@
+import { updateTermStatements, updateTerms } from "./student-experience";
 import { STRIPE_API_VERSION, CHECKOUT_INTEGRATION } from "./stripe-config";
 import { requirePayments } from "./payment-readiness";
 import { retryOrder } from "./payment-retry";
@@ -19,6 +20,8 @@ import { publicProducts, validateBundle, bundleIds } from "./catalog-services";
 import { allocate, reconcile, policy, POLICY_VERSION } from "./finance";
 import { purchaseNotice } from "./notifications";
 type QuoteItem = {
+  update_policy?: string;
+  child_terms?: Record<string, string>;
   product_id: string;
   title: string;
   price: number;
@@ -63,6 +66,12 @@ async function verifyItems(e: FeatureRuntime, ids: string[], seats: number) {
         fail("Material sem conteúdo comercial.", 409);
     }
     result.push({
+      update_policy: await updateTerms(e, p.id),
+      child_terms: Object.fromEntries(
+        await Promise.all(
+          children.map(async (c) => [c.id, await updateTerms(e, c.id)]),
+        ),
+      ),
       product_id: p.id,
       title: p.title,
       price: p.price * seats,
@@ -108,6 +117,7 @@ export async function institutional(
             product_id: i.product_id,
             title: i.title,
             price: i.price,
+            update_policy: i.update_policy,
           })),
         };
       }),
@@ -146,6 +156,7 @@ export async function institutional(
               id: i.product_id,
               title: i.title,
               price: i.price,
+              update_policy: i.update_policy,
             })),
           }),
           now(),
@@ -297,6 +308,18 @@ export async function institutional(
       if (file.file_key && !(await e.BUCKET.head(file.file_key)))
         fail("Um arquivo da proposta não está disponível.", 409);
   await e.DB.batch([
+    ...(await updateTermStatements(
+      e,
+      String(r.id),
+      items.flatMap((i) => [i.product_id, ...i.children.map((c) => c.id)]),
+      Object.assign(
+        {},
+        ...items.map((i) => ({
+          ...i.child_terms,
+          ...(i.update_policy ? { [i.product_id]: i.update_policy } : {}),
+        })),
+      ),
+    )),
     e.DB.prepare(
       "INSERT INTO orders(id,user_id,status,total,created) VALUES(?,?,?,?,?)",
     ).bind(
