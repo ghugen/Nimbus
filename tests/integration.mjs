@@ -4299,6 +4299,270 @@ try {
     );
   }
 
+  {
+    const user = "policy-student",
+      other = "policy-outsider",
+      id = "experience-free-fixture";
+    const pub = await (
+      await expectStatus("sofia-catalog", { user: null }, 200)
+    ).json();
+    assert.equal(pub.external_ai, false);
+    assert(pub.materials.some((p) => p.id === "leitura-de-artigos"));
+    assert(!pub.materials.some((p) => p.id === "patologia-geral"));
+    assert(!JSON.stringify(pub).includes("file_key"));
+    assert(!JSON.stringify(pub).includes("published_questions"));
+    checks += 5;
+    await expectStatus("sofia-profile", { user: null }, 401);
+    await expectStatus("sofia-context", { user: null }, 401);
+    const pref = {
+      course: "Medicina Veterinária",
+      topic: "Lesão celular",
+      goal: "review",
+      format: "Resumos e apostilas",
+      budget: 3000,
+      freeOnly: false,
+      topics: "Lesão celular,Inflamação",
+      dailyMinutes: 30,
+      time: "19:00",
+      timezone: "America/Sao_Paulo",
+      examDate: "",
+    };
+    await expectStatus("sofia-profile", { user, body: pref }, 400);
+    await expectStatus(
+      "sofia-profile",
+      { user, body: { ...pref, remember: true, budget: -10 } },
+      400,
+    );
+    await expectStatus(
+      "sofia-profile",
+      { user, body: { ...pref, remember: true, timezone: "Invalid/Timezone" } },
+      400,
+    );
+    await expectStatus(
+      "sofia-profile",
+      { user, body: { ...pref, remember: true, examDate: "2027-02-30" } },
+      400,
+    );
+    await expectStatus(
+      "sofia-profile",
+      { user, body: { ...pref, remember: true } },
+      200,
+    );
+    assert.equal(
+      db
+        .prepare("SELECT COUNT(*) n FROM sofia_settings WHERE user_id=?")
+        .get(user).n,
+      1,
+    );
+    checks++;
+    const own = await (await call("sofia-profile", { user })).json(),
+      outsider = await (await call("sofia-profile", { user: other })).json();
+    assert.equal(own.profile.topic, pref.topic);
+    assert.equal(outsider.profile, null);
+    checks += 2;
+    const context = await (
+      await expectStatus("sofia-context", { user }, 200)
+    ).json();
+    assert(context.library.some((p) => p.id === id));
+    assert(!JSON.stringify(context).includes("Anotações gerais preservadas"));
+    assert(!JSON.stringify(context).includes("file_key"));
+    checks += 3;
+    await expectStatus("sofia-context?timezone=Invalid", { user }, 400);
+    await expectStatus(
+      "sofia-plan",
+      { user, body: { ...pref, action: "save", dailyMinutes: 0 } },
+      400,
+    );
+    await expectStatus(
+      "sofia-plan",
+      { user, body: { ...pref, action: "save", topics: "" } },
+      400,
+    );
+    await expectStatus(
+      "sofia-plan",
+      { user, body: { ...pref, action: "save", preview_start: "2000-01-01" } },
+      409,
+    );
+    const p = await (
+      await expectStatus(
+        "sofia-plan",
+        { user, body: { ...pref, action: "save" } },
+        200,
+      )
+    ).json();
+    assert(p.plan.tasks.length > 0);
+    assert(p.plan.tasks.every((t) => t.minutes > 0));
+    checks += 2;
+    const task = p.plan.tasks[0].id;
+    await expectStatus(
+      "sofia-plan",
+      {
+        user: other,
+        body: {
+          action: "check",
+          plan_id: p.plan_id,
+          task_id: task,
+          completed: true,
+        },
+      },
+      409,
+    );
+    await expectStatus(
+      "sofia-plan",
+      {
+        user,
+        body: {
+          action: "check",
+          plan_id: p.plan_id,
+          task_id: "unknown",
+          completed: true,
+        },
+      },
+      404,
+    );
+    await expectStatus(
+      "sofia-plan",
+      {
+        user,
+        body: {
+          action: "check",
+          plan_id: p.plan_id,
+          task_id: task,
+          completed: true,
+        },
+      },
+      200,
+    );
+    await expectStatus(
+      "sofia-plan",
+      {
+        user,
+        body: {
+          action: "check",
+          plan_id: p.plan_id,
+          task_id: task,
+          completed: true,
+        },
+      },
+      200,
+    );
+    assert.equal(
+      db
+        .prepare("SELECT COUNT(*) n FROM sofia_task_checks WHERE user_id=?")
+        .get(user).n,
+      1,
+    );
+    checks++;
+    await expectStatus(
+      "sofia-plan",
+      {
+        user,
+        body: {
+          action: "check",
+          plan_id: p.plan_id,
+          task_id: task,
+          completed: false,
+        },
+      },
+      200,
+    );
+    assert.equal(
+      db
+        .prepare("SELECT COUNT(*) n FROM sofia_task_checks WHERE user_id=?")
+        .get(user).n,
+      0,
+    );
+    checks++;
+    const replacement = await (
+      await call("sofia-plan", { user, body: { ...pref, action: "save" } })
+    ).json();
+    assert.notEqual(replacement.plan_id, p.plan_id);
+    checks++;
+    await expectStatus(
+      "sofia-plan",
+      {
+        user,
+        body: {
+          action: "check",
+          plan_id: p.plan_id,
+          task_id: task,
+          completed: true,
+        },
+      },
+      409,
+    );
+    const profileAfterPlan = await (
+      await call("sofia-profile", { user })
+    ).json();
+    assert.equal(profileAfterPlan.profile.topic, pref.topic);
+    checks++;
+    const exp = await (await call("privacy-export", { user })).json();
+    assert.equal(JSON.parse(exp.sofia_settings[0].profile).topic, pref.topic);
+    checks++;
+    await expectStatus(
+      "sofia-profile",
+      { user, body: { action: "clear" } },
+      400,
+    );
+    await expectStatus(
+      "sofia-profile",
+      {
+        user: other,
+        body: { ...pref, remember: true, topic: "Dados da outra conta" },
+      },
+      200,
+    );
+    await expectStatus(
+      "sofia-profile",
+      { user, body: { action: "clear", confirm: true } },
+      200,
+    );
+    assert.equal(
+      (await (await call("sofia-profile", { user })).json()).profile,
+      null,
+    );
+    assert.equal(
+      (await (await call("sofia-profile", { user: other })).json()).profile
+        .topic,
+      "Dados da outra conta",
+    );
+    checks += 2;
+    // A gift sender must not be treated as the recipient by Sofia.
+    db.prepare(
+      "INSERT INTO orders(id,user_id,status,total,created) VALUES('sofia-gift',?,'paid',0,?)",
+    ).run(user, new Date().toISOString());
+    db.prepare(
+      "INSERT INTO order_items(id,order_id,product_id,title,price) VALUES('sofia-gift-item','sofia-gift','sofia-gift-material','Presente privado',0)",
+    ).run();
+    db.prepare(
+      "INSERT INTO order_licenses(order_id,seats,gift) VALUES('sofia-gift',1,1)",
+    ).run();
+    assert(
+      !(await (await call("sofia-context", { user })).json()).library.some(
+        (p) => p.id === "sofia-gift-material",
+      ),
+    );
+    checks++;
+    db.prepare(
+      "INSERT INTO license_invites(id,order_id,email,user_id,created) VALUES('sofia-gift-invite','sofia-gift',?,?,?)",
+    ).run(other + "@nimbus.test", other, new Date().toISOString());
+    assert(
+      (
+        await (await call("sofia-context", { user: other })).json()
+      ).library.some((p) => p.id === "sofia-gift-material"),
+    );
+    checks++;
+    db.prepare(
+      "UPDATE orders SET status='refunded' WHERE id='sofia-gift'",
+    ).run();
+    assert(
+      !(
+        await (await call("sofia-context", { user: other })).json()
+      ).library.some((p) => p.id === "sofia-gift-material"),
+    );
+    checks++;
+  }
+
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );

@@ -26,13 +26,15 @@ export function StudyWorkspace({
   productId,
   isPdf,
   onSaved,
+  initialTab = "read",
 }: {
   productId: string;
   isPdf: boolean;
   onSaved?: () => void;
+  initialTab?: "read" | "practice";
 }) {
   const [data, setData] = useState<Data | null>(null),
-    [tab, setTab] = useState("read"),
+    [tab, setTab] = useState<string>(initialTab),
     [page, setPage] = useState(1),
     [total, setTotal] = useState(0),
     [notePage, setNotePage] = useState(1),

@@ -269,3 +269,5 @@ Consulte [Estudo avançado e assistência editorial](docs/ESTUDO_AVANCADO.md) pa
 `npm run test:stress` executa 30.000 cenários em cada um dos 15 grupos, em SQLite isolado e com provedores simulados. Pode levar vários minutos. Não envia tráfego para a Nimbus publicada, não cobra pagamentos e não envia e-mails externos. Para ensaio rápido use `NIMBUS_STRESS_ROUNDS=100 npm run test:stress`. As limitações de cada grupo e os resultados estão em [relatório de testes de volume](docs/testes/2026-10-26/RELATORIO.md). Testes de navegação não substituem verificação visual em dispositivos reais; as simulações não validam integrações externas reais.
 
 [Modo Estudar agora](docs/MODO_ESTUDAR.md): leitura e caderno lado a lado, controles no celular, cartões de anotações e histórico privado de sessões.
+
+[Sofia, assistente de estudos](docs/SOFIA.md): recomendações por regras, biblioteca opcional, plano de estudo e agenda, sem IA externa.

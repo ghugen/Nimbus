@@ -1,3 +1,4 @@
+import { sofia } from "@/lib/sofia";
 import { studyWorkspace } from "@/lib/study-workspace";
 import { advancedStudy, safeQuestion } from "@/lib/advanced-study";
 import { editorialAI } from "@/lib/editorial-ai";
@@ -458,6 +459,7 @@ async function dispatch(req: Request) {
       fail("Origem da solicitação inválida.", 403);
   }
   for (const handler of [
+    sofia,
     studyWorkspace,
     advancedStudy,
     editorialAI,
@@ -532,6 +534,14 @@ async function dispatch(req: Request) {
       ),
       annotation_cards: await all(
         "SELECT annotation_id,product_id,card_id,created FROM annotation_cards WHERE user_id=?",
+        u.id,
+      ),
+      sofia_settings: await all(
+        "SELECT profile,plan,plan_id,updated FROM sofia_settings WHERE user_id=?",
+        u.id,
+      ),
+      sofia_tasks: await all(
+        "SELECT plan_id,task_id,created FROM sofia_task_checks WHERE user_id=?",
         u.id,
       ),
       exported_at: now(),

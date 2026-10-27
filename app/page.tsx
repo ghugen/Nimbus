@@ -1,4 +1,5 @@
 "use client";
+import { Sofia } from "@/components/sofia";
 import { StudyWorkspace } from "@/components/study-workspace";
 import { AcademicSearch } from "@/components/academic-editorial";
 import { SalesNotice } from "@/components/editorial-evolution";
@@ -345,6 +346,7 @@ export default function Nimbus() {
     [admin, setAdmin] = useState<AdminData | null>(null),
     [form, setForm] = useState(emptyForm),
     [reader, setReader] = useState<LibraryItem | null>(null),
+    [studyStartTab, setStudyStartTab] = useState<"read" | "practice">("read"),
     [accepted, setAccepted] = useState(false),
     [mobile, setMobile] = useState(false),
     [adminTab, setAdminTab] = useState("resumo"),
@@ -641,7 +643,8 @@ export default function Nimbus() {
       );
     });
   }
-  function openReader(item: LibraryItem) {
+  function openReader(item: LibraryItem, mode: "read" | "practice" = "read") {
+    setStudyStartTab(mode);
     setReader(item);
   }
   const signedOut = (title: string) => (
@@ -927,6 +930,35 @@ export default function Nimbus() {
         </div>
       )}
       <main>
+        {view === "sofia" && (
+          <Sofia
+            key={user?.id || "guest"}
+            accountId={user?.id || null}
+            onNavigate={go}
+            onMaterial={(id) => {
+              const p = products.find((p) => p.id === id);
+              if (p) setDetail(p);
+              else {
+                go("catalogo");
+                setQuery("");
+                notify("O catálogo mudou. Confira a disponibilidade atual.");
+              }
+            }}
+            onStudy={async (id, mode) => {
+              const d = await api("library");
+              setLibrary(d.items);
+              const item = (d.items as LibraryItem[]).find(
+                (i) => i.product_id === id,
+              );
+              if (!item)
+                throw Error(
+                  "Este material não está disponível na sua biblioteca. Atualize os dados da Sofia.",
+                );
+              openReader(item, mode);
+            }}
+          />
+        )}
+
         {user &&
           [
             "biblioteca",
@@ -3137,6 +3169,7 @@ export default function Nimbus() {
           "catalogo",
           "favoritos",
           "carrinho",
+          "sofia",
           "biblioteca",
           "pedidos",
           "perfil",
@@ -3157,6 +3190,15 @@ export default function Nimbus() {
           />
         )}
       </main>
+      {!reader && !detail && view !== "sofia" && (
+        <button
+          className="sofia-launcher"
+          aria-label="Conversar com Sofia, assistente da Nimbus"
+          onClick={() => go("sofia")}
+        >
+          <span aria-hidden="true">S✦</span>Fale com a Sofia
+        </button>
+      )}
       <MeasurementPreferences />
       <footer>
         <div className="container footer-grid">
@@ -3176,6 +3218,7 @@ export default function Nimbus() {
           </div>
           <div>
             <strong>Explore</strong>
+            <button onClick={() => go("sofia")}>Sofia, sua assistente</button>
             <button onClick={() => go("catalogo")}>Todos os materiais</button>
             <button
               onClick={() => {
@@ -3547,6 +3590,7 @@ export default function Nimbus() {
             <StudyWorkspace
               key={reader.product_id}
               productId={reader.product_id}
+              initialTab={studyStartTab}
               isPdf={
                 !!(
                   reader.file_name?.toLowerCase().endsWith(".pdf") ||

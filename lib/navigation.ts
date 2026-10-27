@@ -130,6 +130,7 @@ export function safeReturnTarget(value: string | null) {
   const { view } = parseNavigation(clean);
   if (
     [
+      "sofia",
       "inicio",
       "comecar",
       "trilhas",

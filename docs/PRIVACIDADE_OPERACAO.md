@@ -81,3 +81,7 @@ Inventariar tentativas (incluindo respostas e questões preservadas), cartões p
 ## Sessões de estudo
 
 O modo Estudar agora registra abertura e conclusão, resumo voluntário, página, progresso e próxima revisão opcional. Registra também a associação entre anotação e cartão privado, para impedir duplicação por reenvio. Os registros são restritos ao titular, incluídos na exportação pessoal e sujeitos ao procedimento de retenção/exclusão documentado acima. O intervalo de abertura/conclusão não é uma medida de tempo de estudo ativo. Nenhum desses dados é enviado a um provedor de IA por esta funcionalidade.
+
+## Sofia: preferências e planos opcionais
+
+A conversa guiada fica apenas na memória da página e não é enviada ao servidor nem a um fornecedor de IA. Preferências e plano são gravados apenas por ação explícita do titular. `sofia_settings` e `sofia_task_checks` são privados por conta, incluídos na exportação e removíveis pelo controle da Sofia. A conexão opcional consulta direitos atuais, página e revisões; não lê o texto das anotações. A exclusão não altera compras ou anotações e não elimina automaticamente backups. Definir a retenção dessas categorias no roteiro operacional. A agenda é um arquivo local para importação voluntária no calendário, sem envio automático externo. Consulte `SOFIA.md` para limites e validação.

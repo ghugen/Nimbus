@@ -6354,3 +6354,313 @@ fieldset legend {
     flex-wrap: wrap;
   }
 }
+
+/* Sofia: guided assistant, native to Nimbus */
+.sofia-page {
+  max-width: 1100px;
+}
+.sofia-intro {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.sofia-intro > div {
+  min-width: 0;
+}
+.sofia-intro .badge {
+  display: inline-block;
+  white-space: normal;
+  font-size: 10px;
+}
+.sofia-intro h1 {
+  margin: 8px 0;
+  font-size: clamp(32px, 5vw, 52px);
+}
+.sofia-intro p {
+  margin: 8px 0 14px;
+}
+.sofia-avatar {
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 28px;
+  background: #5a408b;
+  color: white;
+  font-size: 54px;
+  font-weight: 800;
+  box-shadow: 5px 5px 0 #c4afd9;
+}
+.sofia-avatar span {
+  position: absolute;
+  right: 8px;
+  top: 3px;
+  font-size: 25px;
+  color: #f3db91;
+}
+.sofia-disclosure {
+  padding: 18px 22px;
+  background: #f5f2fa;
+  border: 1px solid #ddd3ec;
+  border-radius: 16px;
+  color: #514467;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.sofia-nav {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0 12px;
+}
+.sofia-nav button[aria-pressed="true"] {
+  background: #3b285c;
+  color: white;
+}
+.sofia-status:empty {
+  display: none;
+}
+.sofia-status {
+  padding: 12px 0;
+  font-size: 14px;
+  color: #4f356d;
+  overflow-wrap: anywhere;
+}
+.sofia-context {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid #e2d9ed;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  background: #fcfaf5;
+}
+.sofia-context p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 6px 0 0;
+}
+.sofia-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.sofia-chips button {
+  border: 1px solid #d9cee7;
+  border-radius: 999px;
+  background: white;
+  padding: 10px 16px;
+  color: #51366d;
+  cursor: pointer;
+  font-size: 13px;
+}
+.sofia-log {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 650px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 8px 12px 18px 0;
+}
+.sofia-bubble {
+  max-width: 90%;
+  border-radius: 20px;
+  padding: 20px 24px;
+  background: #f3eff9;
+  color: #38284e;
+  overflow-wrap: anywhere;
+}
+.sofia-bubble > strong {
+  font-size: 13px;
+}
+.sofia-bubble > p {
+  margin: 8px 0;
+  line-height: 1.7;
+}
+.sofia-bubble.student {
+  align-self: flex-end;
+  background: #412c63;
+  color: white;
+  max-width: 80%;
+}
+.sofia-result {
+  background: white;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid #ddd3e8;
+  margin-top: 16px;
+  color: #30243e;
+}
+.sofia-result h3 {
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+.sofia-result p,
+.sofia-result li {
+  font-size: 14px;
+  line-height: 1.7;
+}
+.sofia-result ul {
+  padding-left: 20px;
+}
+.sofia-bubble > .text-link {
+  display: inline-block;
+  margin: 12px 16px 0 0;
+}
+.sofia-compose {
+  border-top: 1px solid #e0d6eb;
+  padding-top: 20px;
+  margin-top: 18px;
+}
+.sofia-compose label {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-weight: 700;
+}
+.sofia-compose textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cfc2dd;
+  border-radius: 14px;
+  padding: 16px;
+  font: inherit;
+  resize: vertical;
+  min-height: 90px;
+}
+.sofia-compose .studio-actions {
+  margin-top: 12px;
+}
+.sofia-planner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 24px;
+  align-items: start;
+}
+.sofia-planner > .panel:only-child {
+  grid-column: 1/-1;
+}
+.sofia-planner fieldset {
+  max-height: none;
+  padding: 14px;
+  margin-top: 16px;
+  min-width: 0;
+}
+.sofia-planner .check-label {
+  align-items: start;
+  line-height: 1.6;
+}
+.sofia-planner .check-label input {
+  margin-top: 5px;
+  flex: none;
+}
+.sofia-planner legend {
+  font-weight: 700;
+  font-size: 14px;
+}
+.sofia-planner p,
+.sofia-preferences p {
+  line-height: 1.7;
+}
+.sofia-launcher {
+  position: fixed;
+  bottom: 88px;
+  right: 24px;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #402a60;
+  color: white;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  padding: 12px 20px;
+  box-shadow: 0 4px 18px #3c225b33;
+  cursor: pointer;
+  font-weight: 700;
+}
+.sofia-launcher span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #72559c;
+  color: #ffe6aa;
+}
+.sofia-page button:focus-visible,
+.sofia-launcher:focus-visible {
+  outline: 3px solid #b17ce1;
+  outline-offset: 3px;
+}
+.sofia-page input,
+.sofia-page select,
+.sofia-page textarea {
+  max-width: 100%;
+}
+.sofia-page .studio-actions {
+  flex-wrap: wrap;
+}
+@media (max-width: 760px) {
+  .sofia-intro {
+    align-items: start;
+    gap: 16px;
+  }
+  .sofia-avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 39px;
+    border-radius: 20px;
+  }
+  .sofia-avatar span {
+    font-size: 17px;
+  }
+  .sofia-context {
+    display: block;
+  }
+  .sofia-context .studio-actions {
+    margin-top: 14px;
+  }
+  .sofia-planner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sofia-nav {
+    gap: 8px;
+  }
+  .sofia-nav .btn {
+    flex: 1;
+    padding: 12px 10px;
+  }
+  .sofia-bubble {
+    max-width: 100%;
+    padding: 16px;
+  }
+  .sofia-bubble.student {
+    max-width: 90%;
+  }
+  .sofia-log {
+    max-height: 550px;
+  }
+  .sofia-launcher {
+    right: 12px;
+    bottom: 82px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  .sofia-disclosure {
+    padding: 14px;
+  }
+  .sofia-result {
+    padding: 14px;
+  }
+  .sofia-chips button {
+    padding: 9px 12px;
+  }
+}

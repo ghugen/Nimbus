@@ -874,3 +874,17 @@ export const annotationCards = sqliteTable("annotation_cards", {
   cardId: text("card_id").notNull(),
   created: text("created").notNull(),
 });
+export const sofiaSettings = sqliteTable("sofia_settings", {
+  userId: text("user_id").primaryKey(),
+  profile: text("profile").notNull().default("{}"),
+  plan: text("plan").notNull().default("{}"),
+  planId: text("plan_id").notNull().default(""),
+  updated: text("updated").notNull(),
+});
+export const sofiaTaskChecks = sqliteTable("sofia_task_checks", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  planId: text("plan_id").notNull(),
+  taskId: text("task_id").notNull(),
+  created: text("created").notNull(),
+});
