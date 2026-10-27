@@ -13,7 +13,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/commerce.test.ts tests/sofia.test.ts && node tests/integration.mjs",
+    "test": "node --experimental-strip-types --test tests/commerce.test.ts tests/sofia.test.ts tests/exam.test.ts && node tests/integration.mjs",
     "test:stress": "node tests/stress.mjs"
   },
   "dependencies": {

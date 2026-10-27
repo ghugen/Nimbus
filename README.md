@@ -271,3 +271,5 @@ Consulte [Estudo avançado e assistência editorial](docs/ESTUDO_AVANCADO.md) pa
 [Modo Estudar agora](docs/MODO_ESTUDAR.md): leitura e caderno lado a lado, controles no celular, cartões de anotações e histórico privado de sessões.
 
 [Sofia, assistente de estudos](docs/SOFIA.md): recomendações por regras, biblioteca opcional, plano de estudo e agenda, sem IA externa.
+
+[Prepare minha prova e crescimento](docs/PROVA_E_CRESCIMENTO.md): ementa em texto, comparação, retomadas, recomendações ajustáveis, mapa do acervo e planejamento de aquisição.

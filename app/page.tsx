@@ -1,4 +1,5 @@
 "use client";
+import { GrowthCockpit } from "@/components/growth-cockpit";
 import { Sofia } from "@/components/sofia";
 import { StudyWorkspace } from "@/components/study-workspace";
 import { AcademicSearch } from "@/components/academic-editorial";
@@ -2452,6 +2453,7 @@ export default function Nimbus() {
                 <div className="admin-shell">
                   <AdminNavigation active={adminTab} onNavigate={go} />
                   <div className="admin-content">
+                    {adminTab === "crescimento" && <GrowthCockpit />}
                     {adminTab === "curadoria" && <EvolutionAdmin />}
                     {adminTab === "procura" && <DemandInsights />}
                     {adminTab === "feedback" && <FeedbackReport />}

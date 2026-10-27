@@ -85,3 +85,7 @@ O modo Estudar agora registra abertura e conclusão, resumo voluntário, página
 ## Sofia: preferências e planos opcionais
 
 A conversa guiada fica apenas na memória da página e não é enviada ao servidor nem a um fornecedor de IA. Preferências e plano são gravados apenas por ação explícita do titular. `sofia_settings` e `sofia_task_checks` são privados por conta, incluídos na exportação e removíveis pelo controle da Sofia. A conexão opcional consulta direitos atuais, página e revisões; não lê o texto das anotações. A exclusão não altera compras ou anotações e não elimina automaticamente backups. Definir a retenção dessas categorias no roteiro operacional. A agenda é um arquivo local para importação voluntária no calendário, sem envio automático externo. Consulte `SOFIA.md` para limites e validação.
+
+## Preparação para provas e motivos de recomendação
+
+O texto de ementa é enviado para processamento da consulta e não é persistido. Não enviar dados de terceiros. Motivos de recomendação (`recommendation_feedback`) são privados por titular, salvos por escolha específica, exportáveis e apagáveis na Sofia. A administração consulta apenas totais por motivo. As sugestões de revisão usam os simulados concluídos do titular com acesso atual; não usam anotações nem enviam dados a IA externa. A calculadora de anúncios processa apenas o cenário informado na página, sem acionar serviços de mídia. Definir retenção dos motivos em conjunto com os demais registros opcionais e backups.

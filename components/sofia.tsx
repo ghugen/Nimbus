@@ -1,4 +1,6 @@
 "use client";
+import { ExamPrep } from "./exam-prep";
+import { RecommendationFeedback } from "./recommendation-feedback";
 import { useEffect, useRef, useState } from "react";
 import { callApi } from "./commerce-panels";
 import { areas, materialTypes } from "@/lib/taxonomy";
@@ -70,7 +72,8 @@ export function Sofia({
     [completed, setCompleted] = useState<string[]>([]),
     [alarm, setAlarm] = useState(false),
     [busy, setBusy] = useState(false),
-    [clear, setClear] = useState(false);
+    [clear, setClear] = useState(false),
+    [hidden, setHidden] = useState<string[]>([]);
   const logBox = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (logBox.current) logBox.current.scrollTop = logBox.current.scrollHeight;
@@ -90,6 +93,17 @@ export function Sofia({
       .catch((e) => {
         if (alive) setError(e.message);
       });
+    if (accountId)
+      callApi("recommendation-feedback")
+        .then((d) => {
+          if (alive)
+            setHidden(
+              (d.feedback as { product_id: string }[]).map((x) => x.product_id),
+            );
+        })
+        .catch((e) => {
+          if (alive) setError(e.message);
+        });
     if (accountId)
       callApi("sofia-profile")
         .then((d) => {
@@ -263,7 +277,7 @@ export function Sofia({
       return;
     }
     const result = recommend(
-      catalog,
+      catalog.filter((p) => !hidden.includes(p.id)),
       next,
       personal ? library.map((i) => i.id) : [],
     );
@@ -355,8 +369,20 @@ export function Sofia({
         fica apenas nesta página, não é gravada no servidor e é descartada ao
         sair. Evite incluir dados pessoais ou de terceiros.
       </p>
+      <button
+        className="text-link"
+        onClick={() => {
+          setHidden([]);
+          setStatus(
+            "Sugestões restauradas nesta sessão. Motivos salvos na conta permanecem até serem apagados em Preferências.",
+          );
+        }}
+      >
+        Restaurar sugestões nesta sessão
+      </button>
       <div className="sofia-nav" role="group" aria-label="Áreas da Sofia">
         {[
+          ["exam", "Prepare minha prova"],
           ["conversation", "Conversar"],
           ["plan", "Meu plano"],
           ["preferences", "Preferências"],
@@ -371,6 +397,28 @@ export function Sofia({
           </button>
         ))}
       </div>
+      {tab === "exam" && (
+        <ExamPrep
+          profile={profile}
+          ownedIds={library.map((x) => x.id)}
+          personal={personal}
+          signedIn={!!accountId}
+          onMaterial={onMaterial}
+          onStudy={onStudy}
+          onNavigate={onNavigate}
+          onPlan={(p) => {
+            setProfile(p);
+            setTab("plan");
+            setPlan(null);
+            setPlanId("");
+            setPlanDraftProfile(null);
+            setCompleted([]);
+            setStatus(
+              "Temas transferidos. Confira a data, os minutos e prepare a prévia.",
+            );
+          }}
+        />
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -476,6 +524,13 @@ export function Sofia({
                         <li key={reason}>{reason}</li>
                       ))}
                     </ul>
+                    <RecommendationFeedback
+                      id={r.material.id}
+                      signedIn={!!accountId}
+                      onHide={(id) =>
+                        setHidden((old) => [...new Set([...old, id])])
+                      }
+                    />
                     <div className="studio-actions">
                       <button
                         className="btn secondary small"
@@ -596,6 +651,36 @@ export function Sofia({
             Atualizar catálogo
           </button>
         </div>
+      )}
+      {tab === "preferences" && accountId && (
+        <details className="panel">
+          <summary>Apagar motivos das recomendações</summary>
+          <p>
+            Remove os motivos salvos e libera as sugestões. Não altera seus
+            planos ou compras.
+          </p>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await callApi("recommendation-feedback", {
+                  action: "clear",
+                  confirm: true,
+                });
+                setHidden([]);
+                setStatus("Motivos apagados da sua conta.");
+              } catch (e) {
+                setError((e as Error).message);
+              }
+            }}
+          >
+            <label className="check">
+              <input type="checkbox" required />
+              Confirmo apagar meus motivos salvos
+            </label>
+            <button className="btn secondary">Apagar motivos</button>
+          </form>
+        </details>
       )}
       {tab === "preferences" && (
         <div className="panel sofia-preferences">

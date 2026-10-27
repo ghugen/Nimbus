@@ -4563,6 +4563,186 @@ try {
     checks++;
   }
 
+  // Exam preparation and growth: no syllabus retention, no answer leakage, owner isolation.
+  {
+    const cov = await (
+      await expectStatus(
+        "exam-coverage",
+        {
+          user: null,
+          body: { syllabus: "Leitura de artigos\nTemaquenaoexistexyz" },
+        },
+        200,
+      )
+    ).json();
+    assert.equal(cov.coverage.length, 2);
+    assert.equal(cov.coverage[1].status, "absent");
+    assert(
+      cov.catalog.every(
+        (p) => !("file_key" in p) && !("published_questions" in p),
+      ),
+    );
+    checks += 3;
+    await expectStatus("exam-coverage", { user: null }, 405);
+    await expectStatus(
+      "exam-coverage",
+      { user: null, body: { syllabus: "" } },
+      400,
+    );
+    await expectStatus(
+      "exam-coverage",
+      {
+        user: null,
+        body: {
+          syllabus: Array.from({ length: 21 }, (_, i) => "Tema " + i).join(
+            "\n",
+          ),
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "exam-coverage",
+      { user: null, body: { syllabus: "a".repeat(6001) } },
+      400,
+    );
+    await expectStatus("recommendation-feedback", { user: null }, 401);
+    await expectStatus("growth-cockpit", { user: "alice" }, 403);
+    const panel = await (
+      await expectStatus("growth-cockpit", { user: "admin" }, 200)
+    ).json();
+    assert(Array.isArray(panel.quality));
+    assert(!("user_id" in panel));
+    checks += 2;
+    const product = cov.catalog[0].id;
+    await expectStatus(
+      "recommendation-feedback",
+      { user: "exam-user", body: { product_id: product, reason: "off_topic" } },
+      200,
+    );
+    await expectStatus(
+      "recommendation-feedback",
+      {
+        user: "exam-user",
+        body: { product_id: product, reason: "too_advanced" },
+      },
+      200,
+    );
+    assert.equal(
+      (
+        await (
+          await call("recommendation-feedback", { user: "exam-user" })
+        ).json()
+      ).feedback.length,
+      1,
+    );
+    assert.equal(
+      (
+        await (
+          await call("recommendation-feedback", { user: "exam-other" })
+        ).json()
+      ).feedback.length,
+      0,
+    );
+    checks += 2;
+    await expectStatus(
+      "recommendation-feedback",
+      { body: { product_id: product, reason: "invalid" } },
+      400,
+    );
+    await expectStatus(
+      "recommendation-feedback",
+      { body: { product_id: "unpublished-never", reason: "off_topic" } },
+      404,
+    );
+    await expectStatus(
+      "recommendation-feedback",
+      { user: "exam-user", body: { action: "clear" } },
+      400,
+    );
+    const exported = await (
+      await call("privacy-export", { user: "exam-user" })
+    ).json();
+    assert.equal(exported.recommendation_feedback.length, 1);
+    checks++;
+    await expectStatus(
+      "recommendation-feedback",
+      { user: "exam-other", body: { action: "remove", product_id: product } },
+      200,
+    );
+    assert.equal(
+      (
+        await (
+          await call("recommendation-feedback", { user: "exam-user" })
+        ).json()
+      ).feedback.length,
+      1,
+    );
+    checks++;
+    await expectStatus(
+      "recommendation-feedback",
+      { user: "exam-user", body: { action: "clear", confirm: true } },
+      200,
+    );
+    assert.equal(
+      (
+        await (
+          await call("recommendation-feedback", { user: "exam-user" })
+        ).json()
+      ).feedback.length,
+      0,
+    );
+    checks++;
+    await expectStatus("exam-reviews", { user: null }, 401);
+    db.prepare(
+      "INSERT INTO orders(id,user_id,status,total,created) VALUES('exam-order','exam-user','paid',0,?)",
+    ).run(new Date().toISOString());
+    db.prepare(
+      "INSERT INTO order_items(id,order_id,product_id,title,price) VALUES('exam-item','exam-order',?,'Material de revisão',0)",
+    ).run(product);
+    db.prepare(
+      "INSERT INTO practice_sessions(id,user_id,product_id,questions,answers,status,created,finished) VALUES('exam-session','exam-user',?,?,?,'completed',?,?)",
+    ).run(
+      product,
+      JSON.stringify([
+        {
+          id: "exam-q",
+          prompt: "Pergunta de teste aprovada",
+          options: ["A", "B"],
+          correct: 1,
+          explanation: "Comentário",
+          topic: "Leitura",
+          page: 2,
+        },
+      ]),
+      "[0]",
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
+    const rev = await (
+      await expectStatus("exam-reviews", { user: "exam-user" }, 200)
+    ).json();
+    assert.equal(rev.reviews[0].page, 2);
+    assert.equal(rev.reviews[0].misses, 1);
+    assert(!JSON.stringify(rev).includes("Comentário"));
+    checks += 3;
+    assert.equal(
+      (await (await call("exam-reviews", { user: "exam-other" })).json())
+        .reviews.length,
+      0,
+    );
+    checks++;
+    db.prepare(
+      "UPDATE orders SET status='refunded' WHERE id='exam-order'",
+    ).run();
+    assert.equal(
+      (await (await call("exam-reviews", { user: "exam-user" })).json()).reviews
+        .length,
+      0,
+    );
+    checks++;
+  }
+
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );

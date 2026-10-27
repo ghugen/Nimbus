@@ -6664,3 +6664,139 @@ fieldset legend {
     padding: 9px 12px;
   }
 }
+
+/* Sofia: exame, escolha e continuidade */
+.exam-prep {
+  margin: 24px 0 36px;
+  padding: 24px;
+  border: 1.5px solid var(--ink);
+  border-radius: 16px;
+  background: #fcfaf5;
+}
+.exam-hero h2 {
+  font-size: clamp(27px, 4vw, 38px);
+  margin: 12px 0;
+}
+.exam-prep .form {
+  max-width: none;
+}
+.exam-prep textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+.exam-topics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.exam-topics .panel,
+.exam-compare article {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.exam-material {
+  padding: 16px 0;
+  border-top: 1px solid #ded5e7;
+}
+.exam-material h4 {
+  font-size: 17px;
+  margin: 8px 0;
+}
+.exam-material p {
+  font-size: 14px;
+  line-height: 1.65;
+}
+.exam-material .check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  font-size: 13px;
+}
+.exam-material input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.exam-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+.exam-prep .text-link,
+.growth-cockpit .text-link {
+  display: inline-block;
+  margin: 10px 16px 8px 0;
+}
+.recommend-feedback {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #ddd3e8;
+  border-radius: 10px;
+}
+.recommend-feedback label {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.recommend-feedback select {
+  width: 100%;
+}
+.recommend-feedback .btn {
+  margin: 6px 8px 6px 0;
+}
+.exam-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+.exam-metrics a {
+  text-decoration: none;
+  color: inherit;
+  display: grid;
+  gap: 12px;
+}
+.exam-metrics strong {
+  font-size: 32px;
+}
+.exam-calculator {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.exam-calculator label {
+  display: grid;
+  gap: 8px;
+}
+.exam-calculator input {
+  width: 100%;
+  min-width: 0;
+}
+.growth-cockpit .panel {
+  margin-bottom: 20px;
+}
+.growth-cockpit li {
+  margin-bottom: 12px;
+  line-height: 1.7;
+}
+@media (max-width: 760px) {
+  .exam-prep {
+    padding: 16px;
+  }
+  .exam-topics,
+  .exam-compare,
+  .exam-calculator {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .exam-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sofia-nav .btn {
+    flex: 1 1 40%;
+  }
+  .growth-cockpit .panel {
+    padding: 18px;
+  }
+}

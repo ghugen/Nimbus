@@ -1,3 +1,4 @@
+import { examPrep } from "@/lib/exam-prep";
 import { sofia } from "@/lib/sofia";
 import { studyWorkspace } from "@/lib/study-workspace";
 import { advancedStudy, safeQuestion } from "@/lib/advanced-study";
@@ -459,6 +460,7 @@ async function dispatch(req: Request) {
       fail("Origem da solicitação inválida.", 403);
   }
   for (const handler of [
+    examPrep,
     sofia,
     studyWorkspace,
     advancedStudy,
@@ -534,6 +536,10 @@ async function dispatch(req: Request) {
       ),
       annotation_cards: await all(
         "SELECT annotation_id,product_id,card_id,created FROM annotation_cards WHERE user_id=?",
+        u.id,
+      ),
+      recommendation_feedback: await all(
+        "SELECT product_id,reason,updated FROM recommendation_feedback WHERE user_id=?",
         u.id,
       ),
       sofia_settings: await all(

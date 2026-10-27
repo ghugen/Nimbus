@@ -888,3 +888,11 @@ export const sofiaTaskChecks = sqliteTable("sofia_task_checks", {
   taskId: text("task_id").notNull(),
   created: text("created").notNull(),
 });
+
+export const recommendationFeedback = sqliteTable("recommendation_feedback", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  reason: text("reason").notNull(),
+  updated: text("updated").notNull(),
+});

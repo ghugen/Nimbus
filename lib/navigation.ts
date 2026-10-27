@@ -5,6 +5,7 @@ export const adminGroups = [
     items: [
       ["resumo", "Resumo"],
       ["prontidao", "Prontidão para lançamento"],
+      ["crescimento", "Mercado, acervo e operação"],
     ],
   },
   {
