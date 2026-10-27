@@ -273,3 +273,5 @@ Consulte [Estudo avançado e assistência editorial](docs/ESTUDO_AVANCADO.md) pa
 [Sofia, assistente de estudos](docs/SOFIA.md): recomendações por regras, biblioteca opcional, plano de estudo e agenda, sem IA externa.
 
 [Prepare minha prova e crescimento](docs/PROVA_E_CRESCIMENTO.md): ementa em texto, comparação, retomadas, recomendações ajustáveis, mapa do acervo e planejamento de aquisição.
+
+[Lançamento com coleção aberta](docs/LANCAMENTO_GRATUITO.md): PDFs sem cadastro, conta opcional e exemplos pagos fora da vitrine pública.

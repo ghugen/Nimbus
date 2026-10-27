@@ -193,3 +193,8 @@ export function money(cents: number) {
     currency: "BRL",
   }).format(cents / 100);
 }
+
+// Commercial mockups stay available to administration, never in the public storefront.
+export function isPublicListing(p: Pick<Product, "status" | "demo" | "price">) {
+  return p.status === "published" && !(p.demo && p.price > 0);
+}

@@ -129,7 +129,10 @@ try {
   const catalog = await (
     await expectStatus("catalog", { user: null }, 200)
   ).json();
-  assert.equal(catalog.products.length, 12);
+  assert.equal(catalog.products.length, 5);
+  assert(catalog.products.every((p) => !(p.demo && p.price > 0)));
+  assert.equal(catalog.products.filter((p) => p.public_download).length, 4);
+  checks += 2;
   assert(!("file_key" in catalog.products[0]));
   checks++;
   await expectStatus("library", { user: null }, 401);

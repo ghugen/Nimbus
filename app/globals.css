@@ -6800,3 +6800,39 @@ fieldset legend {
     padding: 18px;
   }
 }
+
+.open-library-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 24px 0 12px;
+}
+.hero-copy .open-library-note {
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 12px 0 20px;
+  max-width: 470px;
+}
+.direct-free-download {
+  margin: 14px 0 2px;
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  gap: 8px;
+}
+.open-library-next {
+  margin: 28px 0;
+}
+@media (max-width: 760px) {
+  .open-library-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .open-library-actions .btn {
+    white-space: normal;
+  }
+  .direct-free-download {
+    font-size: 12px;
+  }
+}

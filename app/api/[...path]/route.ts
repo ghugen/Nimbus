@@ -66,7 +66,13 @@ import {
   fileMime,
 } from "@/lib/taxonomy";
 import { env } from "cloudflare:workers";
-import { seed, categories, formats, type Product } from "@/lib/catalog";
+import {
+  seed,
+  categories,
+  formats,
+  isPublicListing,
+  type Product,
+} from "@/lib/catalog";
 import { parseCart, validProduct, verifyStripe } from "@/lib/commerce";
 export const dynamic = "force-dynamic";
 type Runtime = {
@@ -817,7 +823,7 @@ async function dispatch(req: Request) {
   }
   if (path[0] === "catalog" && method === "GET") {
     const products = (await catalog())
-      .filter((p) => p.status === "published")
+      .filter(isPublicListing)
       .map(
         ({
           file_key,

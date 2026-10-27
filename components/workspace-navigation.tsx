@@ -21,7 +21,12 @@ export function WorkspaceNavigation({
         aria-label="Alternar área da Nimbus"
       >
         {[
-          { id: "loja", path: "inicio", label: "Loja", icon: Store },
+          {
+            id: "loja",
+            path: "inicio",
+            label: "Biblioteca aberta",
+            icon: Store,
+          },
           {
             id: "estudante",
             path: "biblioteca",

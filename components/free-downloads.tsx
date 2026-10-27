@@ -25,10 +25,29 @@ export function FreeDownloads() {
           </article>
         ))}
       </div>
+      <section className="panel open-library-next">
+        <h2>Continue no seu ritmo.</h2>
+        <p>
+          Os downloads acima não exigem conta. Se quiser guardar materiais na
+          biblioteca e salvar planos de estudo, você pode entrar na Nimbus.
+        </p>
+        <div className="studio-actions">
+          <a className="btn secondary" href="/entrar">
+            Usar minha conta (opcional)
+          </a>
+          <a className="text-link" href="/#sofia">
+            Conhecer a Sofia
+          </a>
+        </div>
+        <p>
+          Esta coleção gratuita continua disponível. Novos materiais poderão ser
+          oferecidos separadamente, com preço e condições visíveis.
+        </p>
+      </section>
       <p className="notice">
-        Materiais demonstrativos de organização acadêmica, produzidos para a
-        Nimbus. Uso pessoal e educacional. Os exemplos fictícios estão
-        identificados nos PDFs.
+        Guias introdutórios de organização acadêmica, produzidos para a Nimbus.
+        Uso pessoal e educacional. Os exemplos fictícios estão identificados nos
+        PDFs.
       </p>
     </section>
   );

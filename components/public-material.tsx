@@ -98,7 +98,7 @@ export function PublicMaterial({ product: p }: { product: Product }) {
               </p>
             )}
             {p.public_download && (
-              <a className="btn secondary" href={p.public_download} download>
+              <a className="btn primary" href={p.public_download} download>
                 Baixar PDF gratuito · sem cadastro
               </a>
             )}
@@ -111,13 +111,18 @@ export function PublicMaterial({ product: p }: { product: Product }) {
               </p>
             ) : (
               <button className="btn primary" onClick={add}>
-                {p.price ? "Adicionar ao carrinho" : "Obter material gratuito"}
+                {p.public_download
+                  ? "Guardar na minha biblioteca (opcional)"
+                  : p.price
+                    ? "Adicionar ao carrinho"
+                    : "Obter material gratuito"}
               </button>
             )}
             {error && <p className="error">{error}</p>}
             <p className="muted">
-              Acesso na biblioteca após a confirmação do pedido. Atualizações
-              publicadas pelo autor ficam disponíveis para quem já comprou.
+              {p.public_download
+                ? "O download gratuito dispensa cadastro. Para guardar na biblioteca e acompanhar seu estudo, use a conta opcional."
+                : "Acesso na biblioteca após a confirmação do pedido. Consulte a política de atualizações do material."}
             </p>
           </div>
         </div>

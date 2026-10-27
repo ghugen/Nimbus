@@ -704,7 +704,11 @@ export default function Nimbus() {
             <span>{p.format}</span>
             {p.demo === 1 && (
               <span className="demo">
-                {p.price === 0 ? "Amostra gratuita" : "Demonstração"}
+                {p.public_download
+                  ? "PDF gratuito"
+                  : p.price === 0
+                    ? "Guia gratuito"
+                    : "Demonstração"}
               </span>
             )}
           </div>
@@ -742,6 +746,16 @@ export default function Nimbus() {
               )}
             </span>
           </div>
+          {p.public_download && (
+            <a
+              className="btn primary small direct-free-download"
+              href={p.public_download}
+              download
+              aria-label={"Baixar gratuitamente: " + p.title}
+            >
+              Baixar PDF · sem cadastro <Download size={15} />
+            </a>
+          )}
           <div className="card-bottom">
             <div>
               <small>
@@ -790,7 +804,7 @@ export default function Nimbus() {
             aria-label="Navegação da loja"
           >
             {[
-              ["inicio", "Loja"],
+              ["inicio", "Início"],
               ["comecar", "Comece por aqui"],
               ["catalogo", "Explorar materiais"],
               ["colecoes", "Coleções"],
@@ -1023,10 +1037,24 @@ export default function Nimbus() {
                   </svg>
                 </h1>
                 <p>
-                  Encontre o essencial para entender de verdade.
-                  <br className="desktop" /> Resumos, mapas e materiais para
-                  acompanhar
-                  <br className="desktop" /> cada passo da sua vida acadêmica.
+                  Uma biblioteca acadêmica em expansão.
+                  <br className="desktop" /> Comece com nossos guias gratuitos:
+                  <br className="desktop" /> baixe os PDFs sem cadastro.
+                </p>
+                <div className="open-library-actions">
+                  <button
+                    className="btn primary"
+                    onClick={() => go("gratuitos")}
+                  >
+                    Baixar materiais gratuitos <Download size={18} />
+                  </button>
+                  <button className="text-link" onClick={() => go("sofia")}>
+                    Organizar meus estudos com a Sofia
+                  </button>
+                </div>
+                <p className="open-library-note">
+                  A conta é opcional: use-a para guardar materiais na biblioteca
+                  e salvar seu plano.
                 </p>
                 <form
                   className="hero-search"
@@ -1048,7 +1076,11 @@ export default function Nimbus() {
                 </form>
                 <div className="hero-tags">
                   <span>Comece por:</span>
-                  {["Patologia", "Anatomia", "Cálculo"].map((t) => (
+                  {[
+                    "Métodos de estudo",
+                    "Leitura científica",
+                    "Produção acadêmica",
+                  ].map((t) => (
                     <button
                       key={t}
                       onClick={() => {
@@ -1221,9 +1253,10 @@ export default function Nimbus() {
                 </button>
               </div>
               <div className="catalog-notice">
-                <span className="badge">Em construção</span> Conheça a
-                experiência Nimbus. Os itens pagos abaixo são demonstrativos; o
-                guia gratuito já pode ser adquirido.
+                <span className="badge">Coleção aberta</span> Conheça nossos
+                materiais gratuitos. Baixe os PDFs sem cadastro; a biblioteca e
+                os planos de estudo são opcionais. Novas coleções serão
+                acrescentadas ao acervo.
               </div>
               <div className="tabs showcases">
                 {[
@@ -1246,11 +1279,9 @@ export default function Nimbus() {
               </div>
               <div className="product-grid">
                 {[
+                  ...products.filter((p) => p.price === 0 && p.public_download),
                   ...products.filter(
-                    (p) => p.course === "Medicina Veterinária",
-                  ),
-                  ...products.filter(
-                    (p) => p.course !== "Medicina Veterinária",
+                    (p) => !(p.price === 0 && p.public_download),
                   ),
                 ]
                   .slice(0, 4)
@@ -1322,13 +1353,13 @@ export default function Nimbus() {
                   ],
                   [
                     "02",
-                    "Escolha seu próximo capítulo",
-                    "Adicione os materiais ao carrinho e conclua a aquisição.",
+                    "Baixe seu primeiro material",
+                    "Os PDFs gratuitos podem ser baixados diretamente, sem cadastro.",
                   ],
                   [
                     "03",
-                    "Abra sua biblioteca",
-                    "Acesse seus arquivos e acompanhe suas revisões.",
+                    "Continue do seu jeito",
+                    "Se quiser, use sua conta para guardar materiais e salvar seu plano de estudos.",
                   ],
                 ].map(([n, t, d]) => (
                   <div key={n}>
@@ -2860,8 +2891,8 @@ export default function Nimbus() {
                     "Após a confirmação da aquisição, abra Minha biblioteca. Você pode baixar o arquivo e registrar suas anotações e seu progresso.",
                   ],
                   [
-                    "Os materiais do catálogo já estão à venda?",
-                    "Nesta etapa há itens demonstrativos, identificados nas páginas. O guia gratuito pode ser adquirido para experimentar o fluxo. Materiais reais precisam de arquivo e aprovação para serem publicados.",
+                    "Preciso de cadastro para baixar os PDFs gratuitos?",
+                    "Não. Abra Materiais gratuitos e escolha Baixar PDF. A conta é opcional para guardar materiais na biblioteca e salvar seu plano. Novas coleções, inclusive pagas, poderão ser acrescentadas; cada material indicará claramente preço e condições.",
                   ],
                   [
                     "Quais pagamentos são aceitos?",
@@ -2987,11 +3018,11 @@ export default function Nimbus() {
                 </p>
                 <h2>Nosso momento</h2>
                 <p>
-                  A plataforma está em implantação. O catálogo de demonstração
-                  apresenta possibilidades de organização; o guia gratuito
-                  permite experimentar a biblioteca. Materiais comerciais e
-                  condições com autores serão definidos antes da abertura das
-                  vendas.
+                  Começamos com uma coleção aberta de guias de estudo,
+                  disponíveis para download sem cadastro. Sua conta é opcional
+                  para organizar a biblioteca e os planos. Vamos ampliar o
+                  acervo com novos temas e, quando estiverem prontos, materiais
+                  pagos com informações e preços claros.
                 </p>
                 <button className="btn primary" onClick={() => go("catalogo")}>
                   Conhecer o catálogo <ArrowRight size={16} />
@@ -3006,10 +3037,12 @@ export default function Nimbus() {
                 </div>
                 <h2>Materiais e acesso</h2>
                 <p>
-                  Itens identificados como demonstrativos não representam
-                  produtos comerciais disponíveis. O guia gratuito pode ser
-                  adicionado à biblioteca. Materiais comerciais publicados
-                  indicarão preço, formato, autoria, descrição e prévia.
+                  Os PDFs da coleção aberta podem ser baixados sem cadastro para
+                  uso pessoal e educacional, conforme as indicações dos
+                  arquivos. Guardá-los na biblioteca da conta é opcional. Novos
+                  materiais pagos serão apresentados com preço, formato,
+                  autoria, descrição e prévia. A publicação de novas ofertas não
+                  altera as cópias gratuitas já baixadas.
                 </p>
                 <h2>Aquisição e entrega</h2>
                 <p>
@@ -3347,7 +3380,32 @@ export default function Nimbus() {
                 <strong className="detail-price">
                   {detail.price === 0 ? "Grátis" : money(detail.price)}
                 </strong>
-                {detail.demo === 1 && detail.price > 0 ? (
+                {detail.public_download ? (
+                  <>
+                    <a
+                      className="btn primary full"
+                      href={detail.public_download}
+                      download
+                    >
+                      <Download size={17} />
+                      Baixar PDF gratuito · sem cadastro
+                    </a>
+                    <button
+                      className="text-link"
+                      onClick={() => {
+                        add(detail);
+                        setDetail(null);
+                        go("carrinho");
+                      }}
+                    >
+                      Guardar na minha biblioteca (opcional)
+                    </button>
+                    <p className="muted">
+                      Para guardar na biblioteca e salvar seu progresso, entre
+                      na sua conta. O download acima dispensa cadastro.
+                    </p>
+                  </>
+                ) : detail.demo === 1 && detail.price > 0 ? (
                   <div className="notice">
                     Exemplo de catálogo. Preço e páginas ilustrativos. O
                     material completo não está à venda.
@@ -3397,15 +3455,7 @@ export default function Nimbus() {
                   Ver página do autor
                 </a>
               )}
-              {detail.public_download && (
-                <a
-                  className="btn primary"
-                  href={detail.public_download}
-                  download
-                >
-                  Baixar PDF gratuito · sem cadastro
-                </a>
-              )}
+
               <pre>{detail.preview}</pre>
               <PreviewGallery
                 id={detail.id}

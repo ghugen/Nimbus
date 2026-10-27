@@ -1,6 +1,6 @@
 import { releaseDuePublications } from "./publication-schedule";
 import { orderAccess } from "./licenses";
-import { seed, type Product } from "./catalog";
+import { seed, isPublicListing, type Product } from "./catalog";
 import { normalizeProduct } from "./taxonomy";
 export type StoreRuntime = {
   DB: D1Database;
@@ -67,7 +67,7 @@ export async function publicProducts(env: StoreRuntime) {
       .bind("," + (env.ADMIN_EMAILS || "").toLowerCase() + ",")
       .all<{ id: string; owned: number }>()
   ).results;
-  return source.map((p) => ({
+  return source.filter(isPublicListing).map((p) => ({
     owned: ownership.find((x) => x.id === p.author_id)?.owned || 0,
     ...p,
     rating: ratings.find((r) => r.product_id === p.id)?.rating || 0,
