@@ -1,8 +1,5 @@
 "use client";
-import {
-  AdvancedPractice,
-  AdaptiveCards,
-} from "@/components/advanced-practice";
+import { StudyWorkspace } from "@/components/study-workspace";
 import { AcademicSearch } from "@/components/academic-editorial";
 import { SalesNotice } from "@/components/editorial-evolution";
 import {
@@ -38,7 +35,6 @@ import {
   SubscriptionAdmin,
 } from "@/components/subscription-panels";
 import { ServicesPage, ServicesAdmin } from "@/components/service-panels";
-import { LearningExperience } from "@/components/learning-experience";
 import { OrderTools } from "@/components/order-tools";
 import { RoadmapPanel } from "@/components/roadmap-panel";
 import {
@@ -73,9 +69,7 @@ import {
   ReviewQueue,
   PermissionReview,
 } from "@/components/editorial-operations";
-import { StudyAssistant } from "@/components/study-assistant";
 import { ContextHelp } from "@/components/context-help";
-import { PdfReader } from "@/components/pdf-reader";
 import {
   LibraryFilters,
   StudyOrganization,
@@ -292,7 +286,6 @@ const emptyForm = {
   commercial_accepted: false,
 };
 export default function Nimbus() {
-  const [readerJump, setReaderJump] = useState({ page: 1, key: 0 });
   const [referral, setReferral] = useState<{
     code: string;
     discount: number;
@@ -352,8 +345,6 @@ export default function Nimbus() {
     [admin, setAdmin] = useState<AdminData | null>(null),
     [form, setForm] = useState(emptyForm),
     [reader, setReader] = useState<LibraryItem | null>(null),
-    [notes, setNotes] = useState(""),
-    [progress, setProgress] = useState(0),
     [accepted, setAccepted] = useState(false),
     [mobile, setMobile] = useState(false),
     [adminTab, setAdminTab] = useState("resumo"),
@@ -652,8 +643,6 @@ export default function Nimbus() {
   }
   function openReader(item: LibraryItem) {
     setReader(item);
-    setNotes(item.notes || "");
-    setProgress(item.progress || 0);
   }
   const signedOut = (title: string) => (
     <div className="auth-card">
@@ -3555,28 +3544,22 @@ export default function Nimbus() {
             >
               <Download size={17} /> Baixar meu arquivo
             </button>
-            <LearningExperience productId={reader.product_id} />
-            <AdvancedPractice
+            <StudyWorkspace
+              key={reader.product_id}
               productId={reader.product_id}
-              onPage={(page) => setReaderJump({ page, key: Date.now() })}
-            />
-            <AdaptiveCards
-              productId={reader.product_id}
-              onPage={(page) => setReaderJump({ page, key: Date.now() })}
+              isPdf={
+                !!(
+                  reader.file_name?.toLowerCase().endsWith(".pdf") ||
+                  products.find((p) => p.id === reader.product_id)
+                    ?.public_download
+                )
+              }
+              onSaved={() => {
+                api("library").then((d) => setLibrary(d.items));
+                organization.refresh();
+              }}
             />
             <StudyFeedback productId={reader.product_id} />
-            {(reader.file_name?.toLowerCase().endsWith(".pdf") ||
-              products.find((p) => p.id === reader.product_id)
-                ?.public_download) && (
-              <>
-                <PdfReader productId={reader.product_id} jump={readerJump} />
-                <StudyAssistant
-                  productId={reader.product_id}
-                  onPage={(page) => setReaderJump({ page, key: Date.now() })}
-                />
-                <ContextHelp topic="reader" />
-              </>
-            )}
             <StudyOrganization
               productId={reader.product_id}
               onSaved={() => {
@@ -3599,46 +3582,6 @@ export default function Nimbus() {
                   "Baixe o arquivo para acessar o conteúdo completo."}
               </pre>
             )}
-            <form
-              className="form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                action(async () => {
-                  await api("study", {
-                    id: reader.product_id,
-                    notes,
-                    progress,
-                  });
-                  setLibrary((await api("library")).items);
-                  notify("Anotações e progresso salvos.");
-                });
-              }}
-            >
-              <label>
-                Meu progresso de revisão · {progress}%
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={progress}
-                  onChange={(e) => setProgress(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                Minhas anotações
-                <textarea
-                  rows={6}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Conexões, dúvidas e pontos para a próxima revisão…"
-                  maxLength={20000}
-                />
-              </label>
-              <button className="btn primary" disabled={busy}>
-                Salvar meu estudo <Check size={16} />
-              </button>
-            </form>
           </section>
         </div>
       )}

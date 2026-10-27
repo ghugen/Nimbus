@@ -1,3 +1,4 @@
+import { studyWorkspace } from "@/lib/study-workspace";
 import { advancedStudy, safeQuestion } from "@/lib/advanced-study";
 import { editorialAI } from "@/lib/editorial-ai";
 import { editorialEvolution, assertSalesOpen } from "@/lib/editorial-evolution";
@@ -457,6 +458,7 @@ async function dispatch(req: Request) {
       fail("Origem da solicitação inválida.", 403);
   }
   for (const handler of [
+    studyWorkspace,
     advancedStudy,
     editorialAI,
     editorialEvolution,
@@ -522,6 +524,14 @@ async function dispatch(req: Request) {
       ),
       editorial_ai_drafts: await all(
         "SELECT * FROM ai_editorial_drafts WHERE user_id=?",
+        u.id,
+      ),
+      study_sessions: await all(
+        "SELECT id,product_id,started,finished,summary,page,progress,next_review FROM study_sessions WHERE user_id=?",
+        u.id,
+      ),
+      annotation_cards: await all(
+        "SELECT annotation_id,product_id,card_id,created FROM annotation_cards WHERE user_id=?",
         u.id,
       ),
       exported_at: now(),

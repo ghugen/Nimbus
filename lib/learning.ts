@@ -80,7 +80,7 @@ export async function learning(
       fail("Página, zoom, estado ou data inválidos.");
     await run(
       e,
-      "INSERT INTO reader_states(id,user_id,product_id,page,zoom,folder,status,next_review,updated) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET page=excluded.page,zoom=excluded.zoom,folder=excluded.folder,status=excluded.status,next_review=excluded.next_review,updated=excluded.updated",
+      "INSERT INTO reader_states(id,user_id,product_id,page,zoom,folder,status,next_review,updated) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET page=CASE WHEN ? THEN excluded.page ELSE reader_states.page END,zoom=CASE WHEN ? THEN excluded.zoom ELSE reader_states.zoom END,folder=CASE WHEN ? THEN excluded.folder ELSE reader_states.folder END,status=CASE WHEN ? THEN excluded.status ELSE reader_states.status END,next_review=CASE WHEN ? THEN excluded.next_review ELSE reader_states.next_review END,updated=excluded.updated",
       u.id + ":" + id,
       u.id,
       id,
@@ -90,6 +90,11 @@ export async function learning(
       status,
       due,
       now(),
+      b!.page !== undefined ? 1 : 0,
+      b!.zoom !== undefined ? 1 : 0,
+      b!.folder !== undefined ? 1 : 0,
+      b!.status !== undefined ? 1 : 0,
+      b!.next_review !== undefined ? 1 : 0,
     );
     return json({ ok: true });
   }

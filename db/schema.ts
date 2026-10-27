@@ -854,3 +854,23 @@ export const editorialAdoptions = sqliteTable("editorial_adoptions", {
   id: text("id").primaryKey(),
   created: text("created").notNull(),
 });
+export const studySessions = sqliteTable("study_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  started: text("started").notNull(),
+  finished: text("finished").notNull().default(""),
+  finishToken: text("finish_token").notNull().default(""),
+  summary: text("summary").notNull().default(""),
+  page: integer("page").notNull().default(1),
+  progress: integer("progress").notNull().default(0),
+  nextReview: text("next_review").notNull().default(""),
+});
+export const annotationCards = sqliteTable("annotation_cards", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  productId: text("product_id").notNull(),
+  annotationId: text("annotation_id").notNull(),
+  cardId: text("card_id").notNull(),
+  created: text("created").notNull(),
+});

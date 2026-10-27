@@ -6238,3 +6238,119 @@ fieldset legend {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Focused study workspace */
+.reader-modal:has(.study-workspace) {
+  width: min(1280px, 100%);
+}
+.study-workspace {
+  margin-block: 24px;
+  min-width: 0;
+}
+.study-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 20px;
+}
+.study-heading p {
+  font-size: 14px;
+  margin: 6px 0;
+}
+.study-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 20px 0;
+}
+.study-tabs button {
+  padding: 12px 20px;
+  border: 1px solid #d5cfe6;
+  border-radius: 12px;
+  background: #fff;
+  color: #33294c;
+  font-weight: 700;
+  cursor: pointer;
+}
+.study-tabs button[aria-pressed="true"] {
+  background: #35265e;
+  color: #fff;
+}
+.study-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.study-columns > * {
+  min-width: 0;
+}
+.study-columns [hidden] {
+  display: none !important;
+}
+.study-view-practice {
+  display: block;
+}
+.study-notebook {
+  background: #f7f5fb;
+  border: 1px solid #ded7ed;
+  border-radius: 16px;
+  padding: 18px;
+}
+.study-notebook .form {
+  margin-top: 14px;
+}
+.study-notebook textarea {
+  width: 100%;
+}
+.study-finish {
+  margin-block: 20px;
+  padding: 18px;
+  border: 1px solid #ded7ed;
+  border-radius: 16px;
+}
+.study-finish summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+.study-workspace .pdf-stage {
+  padding: 12px;
+}
+.study-workspace .source-card {
+  overflow-wrap: anywhere;
+}
+.study-tabs button:focus-visible {
+  outline: 3px solid #b06be8;
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .study-heading {
+    flex-direction: column;
+  }
+  .study-columns {
+    display: block;
+  }
+  .study-columns > .study-read:not(.mobile-active),
+  .study-columns > .study-notebook:not(.mobile-active) {
+    display: none;
+  }
+  .study-tabs {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    padding-block: 8px;
+    z-index: 3;
+  }
+  .study-tabs button {
+    flex: 1;
+    padding: 12px 8px;
+  }
+  .study-notebook {
+    padding: 14px;
+  }
+  .reader-modal:has(.study-workspace) {
+    padding: 24px 16px;
+  }
+  .study-workspace .studio-actions {
+    flex-wrap: wrap;
+  }
+}

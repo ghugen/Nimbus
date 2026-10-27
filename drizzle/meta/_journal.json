@@ -183,6 +183,13 @@
       "when": 1793051093133,
       "tag": "0025_editorial_adoptions",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1793064798406,
+      "tag": "0026_study_workspace",
+      "breakpoints": true
     }
   ]
 }

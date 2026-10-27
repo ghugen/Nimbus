@@ -9,9 +9,13 @@ export function PdfReader({
   productId,
   publicSource,
   jump,
+  hideNotes = false,
+  onPageChange,
 }: {
   productId: string;
   publicSource?: string;
+  hideNotes?: boolean;
+  onPageChange?: (page: number, total: number) => void;
   jump?: { page: number; key: number };
 }) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null),
@@ -32,10 +36,14 @@ export function PdfReader({
     searchRun = useRef(0);
   const privateMode = !publicSource;
   useEffect(() => {
-    if (doc && jump) setPage(Math.max(1, Math.min(doc.numPages, jump.page)));
+    if (doc && jump && jump.key > 0)
+      setPage(Math.max(1, Math.min(doc.numPages, jump.page)));
   }, [jump, doc]);
+  useEffect(() => {
+    if (doc) onPageChange?.(page, doc.numPages);
+  }, [page, doc, onPageChange]);
   async function refreshNotes() {
-    if (privateMode)
+    if (privateMode && !hideNotes)
       setAnnotations(
         (await callApi("page-annotations?id=" + encodeURIComponent(productId)))
           .annotations as Annotation[],
@@ -315,7 +323,7 @@ export function PdfReader({
               </button>
             ))}
           </div>
-          {privateMode && (
+          {privateMode && !hideNotes && (
             <>
               <form
                 className="form page-note"

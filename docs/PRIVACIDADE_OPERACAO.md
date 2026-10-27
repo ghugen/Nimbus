@@ -77,3 +77,7 @@ Vídeos externos só carregam após a ação do estudante. Limites de uso guarda
 ## Estudo avançado e IA editorial
 
 Inventariar tentativas (incluindo respostas e questões preservadas), cartões privados, avaliações de dificuldade, data opcional de prova, intervalos de revisão e rascunhos editoriais com fontes. A exportação é restrita ao titular. Revisar retenção e excluir por procedimento autorizado conforme o fluxo acima. OCR é temporário no navegador; não é gravado no servidor nem enviado a um provedor externo. Voz usa apenas serviços identificados como locais pelo navegador. A geração editorial, quando configurada, exige declaração de direitos e consentimento explícito para envio de até três páginas ao provedor; documentar contratos e condições desse serviço antes da ativação.
+
+## Sessões de estudo
+
+O modo Estudar agora registra abertura e conclusão, resumo voluntário, página, progresso e próxima revisão opcional. Registra também a associação entre anotação e cartão privado, para impedir duplicação por reenvio. Os registros são restritos ao titular, incluídos na exportação pessoal e sujeitos ao procedimento de retenção/exclusão documentado acima. O intervalo de abertura/conclusão não é uma medida de tempo de estudo ativo. Nenhum desses dados é enviado a um provedor de IA por esta funcionalidade.

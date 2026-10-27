@@ -4079,6 +4079,226 @@ try {
     checks += 2;
   }
 
+  {
+    const id = "experience-free-fixture",
+      user = "policy-student";
+    await expectStatus("study-workspace?id=" + id, { user: null }, 401);
+    await expectStatus(
+      "study-workspace?id=" + id,
+      { user: "policy-outsider" },
+      403,
+    );
+    await expectStatus("study-session?id=" + id, { user }, 405);
+    await expectStatus(
+      "page-annotations",
+      {
+        user,
+        body: {
+          product_id: id,
+          page: 7,
+          kind: "note",
+          text: "Anotação privada para criar cartão preservando a fonte.",
+        },
+      },
+      200,
+    );
+    const first = await (
+      await call("study-workspace?id=" + id, { user })
+    ).json();
+    const annotation = first.annotations.find((a) =>
+      a.text.startsWith("Anotação privada para criar"),
+    );
+    assert(annotation);
+    checks++;
+    await expectStatus(
+      "annotation-card",
+      {
+        user: "policy-outsider",
+        body: {
+          product_id: id,
+          annotation_id: annotation.id,
+          front: "Pergunta indevida",
+        },
+      },
+      403,
+    );
+    await expectStatus(
+      "annotation-card",
+      {
+        user,
+        body: { product_id: id, annotation_id: "unknown", front: "Pergunta" },
+      },
+      404,
+    );
+    const payload = {
+      product_id: id,
+      annotation_id: annotation.id,
+      front: "Como explicar esta anotação com a fonte?",
+    };
+    const card = await (
+      await expectStatus("annotation-card", { user, body: payload }, 200)
+    ).json();
+    const duplicate = await (
+      await expectStatus(
+        "annotation-card",
+        {
+          user,
+          body: { ...payload, front: "Não substituir o cartão anterior" },
+        },
+        200,
+      )
+    ).json();
+    assert.equal(card.card_id, duplicate.card_id);
+    assert.equal(duplicate.already_created, true);
+    const stored = db
+      .prepare("SELECT * FROM personal_cards WHERE id=?")
+      .get(card.card_id);
+    assert.equal(stored.page, 7);
+    assert.equal(stored.back, annotation.text);
+    assert.equal(stored.front, payload.front);
+    checks += 5;
+    const created = await (
+      await expectStatus(
+        "study-session",
+        { user, body: { product_id: id, action: "start" } },
+        200,
+      )
+    ).json();
+    const resumed = await (
+      await expectStatus(
+        "study-session",
+        { user, body: { product_id: id, action: "start" } },
+        200,
+      )
+    ).json();
+    assert.equal(created.session.id, resumed.session.id);
+    checks++;
+    await expectStatus(
+      "study-session",
+      {
+        user,
+        body: {
+          product_id: id,
+          action: "finish",
+          session_id: "someone-else",
+          page: 2,
+          progress: 40,
+        },
+      },
+      404,
+    );
+    await expectStatus(
+      "study-session",
+      {
+        user,
+        body: {
+          product_id: id,
+          action: "finish",
+          session_id: created.session.id,
+          page: 2,
+          progress: 101,
+        },
+      },
+      400,
+    );
+    await expectStatus(
+      "study-session",
+      {
+        user,
+        body: {
+          product_id: id,
+          action: "finish",
+          session_id: created.session.id,
+          page: 2,
+          progress: 40,
+          next_review: "2027-02-30",
+        },
+      },
+      400,
+    );
+    const due = new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10);
+    const finish = {
+      product_id: id,
+      action: "finish",
+      session_id: created.session.id,
+      page: 4,
+      progress: 40,
+      summary: "Revisei os conceitos e registrei uma dúvida.",
+      next_review: due,
+      notes: "Anotações gerais preservadas ao concluir.",
+    };
+    await expectStatus("study-session", { user, body: finish }, 200);
+    await expectStatus(
+      "study-session",
+      { user, body: { ...finish, progress: 100, notes: "Não sobrescrever" } },
+      200,
+    );
+    const workspace = await (
+      await call("study-workspace?id=" + id, { user })
+    ).json();
+    assert.equal(workspace.study.progress, 40);
+    assert.equal(workspace.study.notes, finish.notes);
+    assert.equal(workspace.state.page, 4);
+    assert.equal(workspace.state.next_review, due);
+    assert.equal(workspace.sessions[0].summary, finish.summary);
+    assert(workspace.sessions[0].finished);
+    checks += 6;
+    await expectStatus(
+      "reader-state",
+      { user, body: { product_id: id, page: 5, zoom: 125 } },
+      200,
+    );
+    const updated = await (
+      await call("reader-state?id=" + id, { user })
+    ).json();
+    assert.equal(updated.state.next_review, due);
+    assert.equal(updated.state.status, "studying");
+    checks += 2;
+    const second = await (
+      await call("study-session", {
+        user,
+        body: { product_id: id, action: "start" },
+      })
+    ).json();
+    assert.notEqual(second.session.id, created.session.id);
+    checks++;
+    await expectStatus(
+      "study-session",
+      {
+        user,
+        body: { ...finish, session_id: second.session.id, progress: 100 },
+      },
+      200,
+    );
+    assert.equal(
+      db
+        .prepare("SELECT status FROM reader_states WHERE id=?")
+        .get(user + ":" + id).status,
+      "completed",
+    );
+    checks++;
+    const exported = await (await call("privacy-export", { user })).json();
+    assert(exported.study_sessions.some((s) => s.id === created.session.id));
+    assert(!JSON.stringify(exported.study_sessions).includes("finish_token"));
+    assert(exported.annotation_cards.some((c) => c.card_id === card.card_id));
+    checks += 3;
+    db.prepare(
+      "INSERT INTO page_annotations(id,user_id,product_id,page,kind,text,created) VALUES('other-annotation','policy-outsider',?,1,'note','Conteúdo de outro titular',?)",
+    ).run(id, new Date().toISOString());
+    await expectStatus(
+      "annotation-card",
+      {
+        user,
+        body: {
+          product_id: id,
+          annotation_id: "other-annotation",
+          front: "Copiar outra conta?",
+        },
+      },
+      404,
+    );
+  }
+
   console.log(
     `Nimbus: ${checks} verificações de integração aprovadas (SQLite real em memória + R2/Stripe simulados).`,
   );
