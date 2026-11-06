@@ -402,6 +402,73 @@ try {
       });
     throw new Error("Unexpected external request");
   };
+  const paymentIntentFetch = globalThis.fetch;
+  let retrySessions = 0;
+  globalThis.fetch = async (url) => {
+    assert.equal(url, "https://api.stripe.com/v1/checkout/sessions");
+    const id = "cs_test_retry_" + ++retrySessions;
+    return Response.json({ id, url: "https://checkout.stripe.com/" + id });
+  };
+  const retryRequest = {
+    user: "bob",
+    body: {
+      ids: [saved.id],
+      accepted: true,
+      request_id: "f36032d1-7ef7-4719-82d1-2ecae7c2f129",
+    },
+  };
+  const firstAttempt = await (
+    await expectStatus("checkout", retryRequest, 200)
+  ).json();
+  assert.deepEqual(
+    await (await expectStatus("checkout", retryRequest, 200)).json(),
+    firstAttempt,
+  );
+  assert.equal(retrySessions, 1);
+  const expiredBody = JSON.stringify({
+    id: "evt_checkout_expired_retry",
+    type: "checkout.session.expired",
+    data: {
+      object: {
+        id: "cs_test_retry_1",
+        metadata: { order_id: firstAttempt.order },
+      },
+    },
+  });
+  const expiredTime = String(Math.floor(Date.now() / 1000));
+  const expiredSig = createHmac("sha256", "whsec_fake")
+    .update(expiredTime + "." + expiredBody)
+    .digest("hex");
+  await expectStatus(
+    "webhook",
+    {
+      user: null,
+      method: "POST",
+      raw: expiredBody,
+      headers: { "stripe-signature": `t=${expiredTime},v1=${expiredSig}` },
+    },
+    200,
+  );
+  const endedAttempt = await (
+    await expectStatus("checkout", retryRequest, 409)
+  ).json();
+  assert.equal(endedAttempt.code, "checkout_ended");
+  assert.equal(retrySessions, 1);
+  const nextAttempt = await (
+    await expectStatus(
+      "checkout",
+      {
+        ...retryRequest,
+        body: { ...retryRequest.body, request_id: crypto.randomUUID() },
+      },
+      200,
+    )
+  ).json();
+  assert.notEqual(nextAttempt.order, firstAttempt.order);
+  assert.equal(retrySessions, 2);
+  await expectStatus("download/" + saved.id, { user: "bob" }, 403);
+  globalThis.fetch = paymentIntentFetch;
+
   await expectStatus("download/" + saved.id, {}, 403);
   await expectStatus(
     "finance",
@@ -465,7 +532,20 @@ try {
   await expectStatus("download/" + saved.id, {}, 403);
   await webhook();
   await webhook();
-  await expectStatus("download/" + saved.id, {}, 200);
+  const purchasedPdf = await expectStatus("download/" + saved.id, {}, 200);
+  assert.equal(purchasedPdf.headers.get("content-type"), "application/pdf");
+  assert.equal(purchasedPdf.headers.get("cache-control"), "private, no-store");
+  assert.equal(
+    (await PDFDocument.load(await purchasedPdf.arrayBuffer())).getPageCount(),
+    1,
+  );
+  const paidLibrary = await (await expectStatus("library", {}, 200)).json();
+  assert(paidLibrary.items.some((item) => item.product_id === saved.id));
+  const otherLibrary = await (
+    await expectStatus("library", { user: "bob" }, 200)
+  ).json();
+  assert(!otherLibrary.items.some((item) => item.product_id === saved.id));
+  await expectStatus("download/" + saved.id, { user: null }, 401);
   const authorFinance = (await (await call("author")).json()).finance;
   const sale = authorFinance.entries.find((x) => x.order_id === checkout.order);
   assert.equal(sale.rate, 2500);

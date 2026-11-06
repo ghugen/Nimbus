@@ -238,6 +238,7 @@ type ApiResponse = {
   discount?: number;
   total?: number;
   error: string;
+  code?: string;
   products: Product[];
   payments: boolean;
   user: User | null;
@@ -267,7 +268,11 @@ async function api(path: string, data?: unknown) {
       : undefined,
   );
   const result = (await r.json()) as ApiResponse;
-  if (!r.ok) throw new Error(result.error || "Não foi possível concluir.");
+  if (!r.ok)
+    throw Object.assign(
+      new Error(result.error || "Não foi possível concluir."),
+      { code: result.code },
+    );
   return result;
 }
 const emptyForm = {
@@ -2065,6 +2070,10 @@ export default function Nimbus() {
                             ids: cart,
                             accepted,
                             request_id,
+                          }).catch((error: Error & { code?: string }) => {
+                            if (error.code === "checkout_ended")
+                              sessionStorage.removeItem(key);
+                            throw error;
                           });
                           if (result.url) {
                             window.location.assign(result.url);

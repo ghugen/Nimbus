@@ -921,6 +921,7 @@ async function dispatch(req: Request) {
         status: string;
         total: number;
         checkout_url: string;
+        session_id: string | null;
       }>("SELECT * FROM orders WHERE id=? AND user_id=?", requestHash, u.id)
     )[0];
     if (previous) {
@@ -932,6 +933,15 @@ async function dispatch(req: Request) {
         });
       if (previous.checkout_url && previous.status === "pending")
         return json({ url: previous.checkout_url, order: previous.id });
+      if (previous.status === "failed" && previous.session_id)
+        return json(
+          {
+            error:
+              "O checkout foi encerrado. Clique novamente para iniciar um novo pagamento.",
+            code: "checkout_ended",
+          },
+          409,
+        );
       fail(
         "Este checkout está sendo processado ou foi encerrado. Atualize seu carrinho para tentar novamente.",
         409,
